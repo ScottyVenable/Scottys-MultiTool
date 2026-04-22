@@ -1086,3 +1086,52 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-size: 10px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
+
+/* ── Browser splash (immersive entry) ─────────────────────────────────────── */
+.browser-splash {
+  position: absolute; inset: 0; z-index: 50;
+  background: linear-gradient(135deg, var(--bg-1), var(--bg-0));
+  display: flex; align-items: center; justify-content: center;
+  animation: browser-splash-fade .24s ease;
+}
+@keyframes browser-splash-fade {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.browser-splash-inner {
+  max-width: 520px; width: 86%;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 28px 32px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--r) * 1.5);
+  box-shadow: var(--shadow);
+}
+.browser-splash-icon { color: var(--accent); }
+.browser-splash-title { font-size: 26px; font-weight: 700; color: var(--text-0); }
+.browser-splash-sub { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+.browser-splash-sites-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--text-3); display: flex; align-items: center; gap: 6px; margin-top: 6px;
+}
+.browser-splash-sites-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 6px;
+}
+.browser-splash-site {
+  text-align: left; padding: 8px 10px;
+  background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--r);
+  cursor: pointer; transition: border-color .12s ease, transform .08s ease;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.browser-splash-site:hover { border-color: var(--accent); transform: translateY(-1px); }
+.browser-splash-site-host { font-size: 11px; color: var(--accent); font-weight: 600; }
+.browser-splash-site-title {
+  font-size: 12px; color: var(--text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.browser-splash-tip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; background: var(--bg-3); border-radius: var(--r);
+  font-size: 11px; color: var(--text-2);
+}
+.browser-splash-enter { margin-top: 4px; align-self: flex-end; }

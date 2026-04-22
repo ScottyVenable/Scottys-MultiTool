@@ -1,9 +1,58 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Plus, X, Star, BookOpen, Search as SearchIcon, Clock, Sparkles } from 'lucide-react'
+import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Plus, X, Star, BookOpen, Search as SearchIcon, Clock, Sparkles, Compass, Newspaper, Gauge } from 'lucide-react'
 import { useToast } from './Toast'
 import { safeCall } from '../utils/logger'
 
 const HOME_URL = 'https://duckduckgo.com'
+
+const BROWSER_TIPS = [
+  'Ctrl+T opens a new tab. Ctrl+Shift+T reopens the last closed one.',
+  'Ctrl+L focuses the address bar. Ctrl+F finds text on the page.',
+  'Middle-click a tab to close it. Middle-click a link to open it in a new tab.',
+  'Press the sparkle icon to summarize the current page with AI.',
+  'Your bookmarks live entirely on this machine — no sync, no cloud.',
+]
+
+// Shown on first entry each session. Sets a sessionStorage flag so it does not
+// appear again until the app is relaunched.
+function BrowserSplash({ onEnter, quickSites }) {
+  const [tip] = useState(() => BROWSER_TIPS[Math.floor(Math.random() * BROWSER_TIPS.length)])
+  return (
+    <div className="browser-splash">
+      <div className="browser-splash-inner">
+        <div className="browser-splash-icon"><Compass size={44} strokeWidth={1.5} /></div>
+        <div className="browser-splash-title">Browser</div>
+        <div className="browser-splash-sub">
+          A calm, local browser. No tracking, no telemetry, no history leaving this machine.
+        </div>
+
+        {quickSites.length > 0 && (
+          <div className="browser-splash-sites">
+            <div className="browser-splash-sites-label"><Newspaper size={12} /> Most visited</div>
+            <div className="browser-splash-sites-grid">
+              {quickSites.slice(0, 6).map(s => (
+                <button key={s.url} className="browser-splash-site" onClick={() => onEnter(s.url)} title={s.url}>
+                  <span className="browser-splash-site-host">{hostOf(s.url)}</span>
+                  <span className="browser-splash-site-title">{s.title || s.url}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="browser-splash-tip"><Gauge size={12} /> {tip}</div>
+
+        <button className="btn btn-primary browser-splash-enter" onClick={() => onEnter()}>
+          Enter Browser
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function hostOf(u) {
+  try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u }
+}
 
 const READING_MODE_SCRIPT = `
 (function() {
@@ -34,9 +83,18 @@ export default function Browser() {
   const [recentlyClosed, setRecentlyClosed] = useState([])
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
+  const [splashVisible, setSplashVisible] = useState(() => {
+    try { return sessionStorage.getItem('browser-splash-dismissed') !== '1' } catch { return true }
+  })
   const addressRef = useRef(null)
   const webviewRef = useRef(null)
   const isElectron = !!window.api
+
+  const dismissSplash = (url) => {
+    try { sessionStorage.setItem('browser-splash-dismissed', '1') } catch {}
+    setSplashVisible(false)
+    if (url) setTimeout(() => navigate(url), 30)
+  }
 
   useEffect(() => {
     if (!isElectron) return
@@ -183,6 +241,12 @@ export default function Browser() {
 
   return (
     <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)', position: 'relative' }}>
+      {splashVisible && (
+        <BrowserSplash
+          onEnter={(url) => dismissSplash(url)}
+          quickSites={bookmarks.slice(0, 6)}
+        />
+      )}
       <div className="browser-tabstrip">
         {tabs.map(t => (
           <div key={t.id}
