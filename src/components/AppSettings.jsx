@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Settings, Key, Smartphone, Bell, Palette, Save, Check, RefreshCw, Lock, X, Download } from 'lucide-react'
 import { sha256 } from './PinLock'
+import ProfileSection from './Auth/ProfileSection'
 
 const ACCENT_PRESETS = [
   { name: 'Indigo', color: '#6366f1' },
@@ -84,7 +85,7 @@ export default function AppSettings() {
   const checkForUpdates = async () => {
     setUpdateStatus('Checking…')
     try {
-      const r = await fetch('https://api.github.com/repos/scottymac/macrobot/releases/latest', { cache: 'no-store' })
+      const r = await fetch('https://api.github.com/repos/ScottyVenable/Scottys-MultiTool/releases/latest', { cache: 'no-store' })
       if (!r.ok) throw new Error('HTTP ' + r.status)
       const json = await r.json()
       const latest = (json.tag_name || '').replace(/^v/, '')
@@ -129,6 +130,9 @@ export default function AppSettings() {
           {saved ? <><Check size={13} /> Saved!</> : <><Save size={13} /> Save Settings</>}
         </button>
       </div>
+
+      {/* Profile & Account */}
+      <ProfileSection />
 
       {/* AI */}
       <Section title="AI Integration" icon={Key}>

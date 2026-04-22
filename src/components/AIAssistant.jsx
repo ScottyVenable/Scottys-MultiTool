@@ -299,6 +299,7 @@ function ComputerUseTab({ aiConfig }) {
   const [autoApprove, setAutoApprove] = useState(false)
   const [stepDelay, setStepDelay] = useState(1500)
   const [debugMode, setDebugMode] = useState(false)
+  const [dryRun, setDryRun] = useState(false)
   const [imgFull, setImgFull] = useState(false)
   const [actionError, setActionError] = useState(null)
   const transcriptRef = useRef(null)
@@ -307,7 +308,12 @@ function ComputerUseTab({ aiConfig }) {
   const iterRef = useRef(0)
   const approveRef = useRef(null)
   const errorCapRef = useRef(null)
+  const startTimeRef = useRef(0)
+  // Rolling short-term memory of recent (thought, action) tuples for multi-step coherence.
+  const memoryRef = useRef([])
+  const MAX_MEMORY = 4
   const MAX_ITER = 20
+  const MAX_WALL_MS = 5 * 60 * 1000 // 5 minutes per run
   const isElectron = !!window.api
 
   const setPending = (v) => { pendingRef.current = v; _setPending(v) }
@@ -326,26 +332,46 @@ function ComputerUseTab({ aiConfig }) {
     scrollLog()
   }
 
-  const takeScreenshot = async () => {
+  const takeScreenshot = async (opts = {}) => {
     const sources = await safeCall(() => window.api.screen.sources(), { where: 'screen.sources', toast, fallback: [] })
     if (!sources?.length) return null
-    const cap = await safeCall(() => window.api.screen.capture(sources[0].id), { where: 'screen.capture', toast, fallback: null })
-    if (cap?.success) setScreenshot(cap.dataUrl)
+    // For model payloads we request a smaller JPEG; for UI display we keep PNG.
+    const cap = await safeCall(
+      () => window.api.screen.capture(sources[0].id, { format: opts.forModel ? 'jpeg' : 'png', quality: 75, maxDim: 1280 }),
+      { where: 'screen.capture', toast, fallback: null }
+    )
+    if (cap?.success && !opts.forModel) setScreenshot(cap.dataUrl)
     return cap
   }
 
   const requestNextAction = async (cap, retryNote) => {
+    // Wall-clock timeout check
+    if (startTimeRef.current && (Date.now() - startTimeRef.current) > MAX_WALL_MS) {
+      addEntry({ type: 'system', text: `Max wall-clock time (${MAX_WALL_MS/1000}s) reached. Stopping.` })
+      setRunning(false); runRef.current = false; return
+    }
     const step = iterRef.current + 1
+    // Include rolling memory of recent steps to improve multi-step coherence
+    const memBlock = memoryRef.current.length
+      ? '\n\nRECENT STEPS (for context):\n' + memoryRef.current.map((m, i) =>
+          `  ${i+1}. thought: ${m.thought || '(none)'} — action: ${m.action}`).join('\n')
+      : ''
     const promptText = retryNote
       ? `GOAL: ${goal}\n\nYour previous response could not be parsed: ${retryNote}\nRespond with a valid JSON object only, no markdown or extra text.`
-      : `GOAL: ${goal}\n\nStep ${step}. Analyze the screenshot and give the next single action.`
+      : `GOAL: ${goal}${memBlock}\n\nStep ${step}. Analyze the screenshot and give the next single action.`
+    // Use model-optimized screenshot (JPEG ~75 quality) if available
+    let modelImageUrl = cap.dataUrl
+    if (!retryNote) {
+      const capForModel = await takeScreenshot({ forModel: true })
+      if (capForModel?.success) modelImageUrl = capForModel.dataUrl
+    }
     const result = await safeCall(() => window.api.ai.query({
       prompt: promptText,
       systemPrompt: COMPUTER_USE_SYSTEM,
       endpoint: aiConfig.apiBase || 'http://localhost:1234',
       apiKey: (aiConfig.provider === 'openai' || aiConfig.provider === 'anthropic') ? aiConfig.apiKey : undefined,
       model: aiConfig.model || 'local-model',
-      images: [cap.dataUrl],
+      images: [modelImageUrl],
       temperature: 0.1,
       maxTokens: 300,
       responseFormat: 'json_object',
@@ -377,17 +403,25 @@ function ComputerUseTab({ aiConfig }) {
       addEntry({ type: 'done', text: parsed.action.reason || 'Goal complete.' })
       setRunning(false); runRef.current = false; return
     }
-    setPending({ ...parsed.action, _raw: result.content })
+    setPending({ ...parsed.action, _raw: result.content, _thought: parsed.thought })
   }
 
   const approve = async () => {
     const action = pendingRef.current
     if (!action) return
     const clean = { ...action }
-    delete clean._raw
-    addEntry({ type: 'action', text: describeAction(clean) })
+    const thought = action._thought
+    delete clean._raw; delete clean._thought
+    addEntry({ type: 'action', text: (dryRun ? '[DRY-RUN] ' : '') + describeAction(clean) })
+    // Record step into rolling memory
+    memoryRef.current = [...memoryRef.current, { thought, action: describeAction(clean) }].slice(-MAX_MEMORY)
     setPending(null); setActionError(null)
-    const res = await safeCall(() => window.api.action.execute(clean), { where: 'action.execute', toast, fallback: { success: false } })
+    let res
+    if (dryRun) {
+      res = { success: true }
+    } else {
+      res = await safeCall(() => window.api.action.execute(clean), { where: 'action.execute', toast, fallback: { success: false } })
+    }
     if (!runRef.current) return
     if (!res?.success) {
       addEntry({ type: 'error', text: `Execution failed: ${res?.error || 'unknown'}` })
@@ -430,7 +464,9 @@ function ComputerUseTab({ aiConfig }) {
     setRunning(true); runRef.current = true
     setTranscript([]); setIteration(0); setPending(null); setActionError(null)
     errorCapRef.current = null
-    addEntry({ type: 'system', text: `Goal: "${goal}"` })
+    memoryRef.current = []
+    startTimeRef.current = Date.now()
+    addEntry({ type: 'system', text: `Goal: "${goal}"${dryRun ? ' — DRY-RUN mode (no actions executed)' : ''}` })
     const cap = await takeScreenshot()
     if (!cap?.success) {
       addEntry({ type: 'error', text: 'Screen capture failed. Check Electron screen-capture permissions.' })
@@ -438,6 +474,15 @@ function ComputerUseTab({ aiConfig }) {
     }
     await requestNextAction(cap)
   }
+
+  // Global Esc to abort while running
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && runRef.current) { e.preventDefault(); abort() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const retryFromError = async () => {
     const cap = errorCapRef.current
@@ -465,6 +510,10 @@ function ComputerUseTab({ aiConfig }) {
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer' }}>
             <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} />
             Debug
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', color: dryRun ? 'var(--blue, #3b82f6)' : undefined, fontWeight: dryRun ? 600 : 400 }} title="Describe each action but don't execute it.">
+            <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)} />
+            Dry-run
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', color: autoApprove ? 'var(--yellow)' : undefined, fontWeight: autoApprove ? 600 : 400 }}>
             <input type="checkbox" checked={autoApprove} onChange={e => setAutoApprove(e.target.checked)} />

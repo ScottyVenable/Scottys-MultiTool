@@ -3,7 +3,8 @@ import {
   LayoutDashboard, Zap, Keyboard, Type, MousePointer2,
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
-  BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search
+  BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
+  User as UserIcon, LogOut, ChevronUp
 } from 'lucide-react'
 import Dashboard from './components/Dashboard'
 import MacroManager from './components/MacroManager'
@@ -34,6 +35,8 @@ import { ToastProvider } from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
 import CommandPalette from './components/CommandPalette'
+import { AuthProvider, useAuth } from './components/Auth/AuthContext'
+import AuthGate from './components/Auth/AuthGate'
 
 const NAV = [
   { id: 'dashboard',     label: 'Dashboard',      icon: LayoutDashboard, section: 'main' },
@@ -100,8 +103,40 @@ const PAGE_MAP = {
   help: HelpDocs,
 }
 
-export default function App() {
-  const [page, setPage] = useState('dashboard')
+function SidebarUser({ onNavigate }) {
+  const { user, logout } = useAuth()
+  const [open, setOpen] = useState(false)
+  if (!user) return null
+  const initial = (user.displayName || user.username || '?').charAt(0).toUpperCase()
+  return (
+    <div className="sidebar-user" style={{ position: 'relative' }}>
+      {open && (
+        <div className="sidebar-user-menu" role="menu">
+          <button className="sidebar-user-menu-item" onClick={() => { setOpen(false); onNavigate('settings') }}>
+            <UserIcon size={13} /> Profile & Settings
+          </button>
+          <button className="sidebar-user-menu-item danger" onClick={async () => { setOpen(false); await logout() }}>
+            <LogOut size={13} /> Sign out
+          </button>
+        </div>
+      )}
+      <button className="sidebar-user-btn" onClick={() => setOpen(v => !v)} aria-haspopup="true" aria-expanded={open}>
+        <div className="sidebar-user-avatar">
+          {user.avatarDataUrl ? <img src={user.avatarDataUrl} alt="" /> : initial}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="sidebar-user-name">{user.displayName || user.username}</div>
+          <div className="sidebar-user-sub">@{user.username}</div>
+        </div>
+        <ChevronUp size={12} style={{ color: 'var(--text-3)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+    </div>
+  )
+}
+
+function MainApp() {
+  const { user } = useAuth()
+  const [page, setPage] = useState(() => user?.preferences?.defaultPage || 'dashboard')
   const [macroCounts, setMacroCounts] = useState(0)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const isElectron = !!window.api
@@ -111,6 +146,18 @@ export default function App() {
     window.api.macros.list().then(m => setMacroCounts(m.length)).catch(() => {})
   }, [page])
 
+  // Apply per-user accent + theme whenever the active user changes
+  useEffect(() => {
+    if (user?.preferences?.accentColor) {
+      document.documentElement.style.setProperty('--accent', user.preferences.accentColor)
+    } else if (isElectron) {
+      window.api.store.get('settings').then(s => {
+        if (s?.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor)
+      }).catch(() => {})
+    }
+    if (user?.preferences?.defaultPage) setPage(user.preferences.defaultPage)
+  }, [user?.id])
+
   useEffect(() => {
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -119,20 +166,12 @@ export default function App() {
       }
     }
     window.addEventListener('keydown', onKey)
-    // Apply saved accent color if any
-    if (isElectron) {
-      window.api.store.get('settings').then(s => {
-        if (s?.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor)
-      }).catch(() => {})
-    }
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const PageComponent = PAGE_MAP[page] || Dashboard
 
   return (
-    <ToastProvider>
-      <AIAttachmentProvider>
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-logo">
@@ -169,6 +208,8 @@ export default function App() {
           })}
         </nav>
 
+        <SidebarUser onNavigate={setPage} />
+
         <div className="sidebar-bottom">
           <div className="text-xs text-muted text-center" style={{ padding: '4px 0' }}>
             Scotty's Multitool v1.0
@@ -196,7 +237,19 @@ export default function App() {
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={setPage} />
     </div>
-      </AIAttachmentProvider>
-    </ToastProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <AIAttachmentProvider>
+          <AuthGate>
+            <MainApp />
+          </AuthGate>
+        </AIAttachmentProvider>
+      </ToastProvider>
+    </AuthProvider>
   )
 }

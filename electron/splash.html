@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'" />
+<title>Scotty's Multitool</title>
+<style>
+  :root {
+    --bg-0: #0a0a0a;
+    --bg-1: #111111;
+    --bg-2: #181818;
+    --bg-3: #1f1f1f;
+    --border: #2a2a2a;
+    --accent: #6366f1;
+    --accent-h: #818cf8;
+    --accent-dim: rgba(99,102,241,0.16);
+    --text-0: #f5f5f5;
+    --text-1: #c9c9c9;
+    --text-2: #8a8a8a;
+    --text-3: #4a4a4a;
+    --green: #22c55e;
+    --mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: transparent; color: var(--text-0);
+    font-family: var(--font); font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    user-select: none; -webkit-user-select: none;
+  }
+  .wrap {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 36px 32px 26px;
+    background: radial-gradient(ellipse at top, #1a1a24 0%, #0a0a0a 70%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    -webkit-app-region: drag;
+    opacity: 0; transform: translateY(6px);
+    animation: fadeIn 320ms ease forwards;
+  }
+  .wrap.hide { animation: fadeOut 400ms ease forwards; }
+  @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeOut { to { opacity: 0; transform: translateY(-8px); } }
+
+  /* Subtle grid overlay using the accent color */
+  .wrap::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 14px;
+    background-image:
+      linear-gradient(var(--accent-dim) 1px, transparent 1px),
+      linear-gradient(90deg, var(--accent-dim) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at center, rgba(0,0,0,.6) 20%, transparent 70%);
+    opacity: 0.25;
+  }
+
+  .logo-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; position: relative; }
+  .logo {
+    width: 72px; height: 72px; border-radius: 18px;
+    background: linear-gradient(140deg, var(--accent) 0%, var(--accent-h) 100%);
+    box-shadow: 0 10px 30px rgba(99,102,241,0.35);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+  }
+  .logo svg { width: 36px; height: 36px; }
+  .wordmark { font-size: 22px; font-weight: 700; letter-spacing: 0.2px; }
+  .tagline { color: var(--text-2); font-size: 12px; }
+  .version { color: var(--text-3); font-family: var(--mono); font-size: 11px; margin-top: 2px; }
+
+  .progress-wrap { width: 100%; display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .progress-bar {
+    width: 100%; height: 6px; background: var(--bg-3); border-radius: 99px; overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .progress-fill {
+    height: 100%; width: 4%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    transition: width 280ms ease;
+  }
+  .status {
+    color: var(--text-1); font-family: var(--mono); font-size: 11px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .status .pct { color: var(--accent-h); }
+
+  .tip-ribbon {
+    width: 100%; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 11.5px; color: var(--text-2);
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .tip-ribbon .tip-label { color: var(--accent-h); font-weight: 600; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
+  .tip-text { color: var(--text-1); margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <div class="logo-wrap">
+      <div class="logo" aria-hidden="true">
+        <!-- Wrench icon (matches lucide-react Wrench used in the app) -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a2 2 0 1 0 2.8 2.8l6-6a4 4 0 0 0 5.4-5.4l-2.1 2.1a2 2 0 1 1-2.8-2.8Z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="wordmark">Scotty's Multitool</div>
+        <div class="tagline">Your all-in-one Windows productivity companion</div>
+        <div class="version" id="version">v1.0.0</div>
+      </div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" id="fill"></div></div>
+      <div class="status">
+        <span id="label">Booting…</span>
+        <span class="pct" id="pct">0%</span>
+      </div>
+    </div>
+
+    <div class="tip-ribbon">
+      <div>
+        <div class="tip-label">Tip</div>
+        <div class="tip-text" id="tip">Press Ctrl+K anywhere to open the Command Palette.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const TIPS = [
+    "Press Ctrl+K anywhere to open the Command Palette.",
+    "Hotkeys you register are active system-wide while the app is running.",
+    "Bookmark the pages you visit most in the built-in Browser tab.",
+    "Earn XP by completing chores — each difficulty star is worth 10 XP.",
+    "Set a PIN in Settings to lock the Journal for privacy.",
+    "The AI Workstation supports LM Studio, OpenAI, and Claude."
+  ];
+  document.getElementById('tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+
+  const fill = document.getElementById('fill');
+  const pct = document.getElementById('pct');
+  const label = document.getElementById('label');
+  const wrap = document.getElementById('wrap');
+
+  // Listen to main-process progress messages via the preload-less `require` path
+  // (splash has nodeIntegration off, but we inline ipcRenderer via exposed global
+  // only when available — otherwise just animate cosmetically).
+  let lastPct = 0;
+  function apply(p) {
+    if (!p) return;
+    const percent = Math.max(lastPct, Math.min(100, Math.round(p.percent || 0)));
+    lastPct = percent;
+    fill.style.width = percent + '%';
+    pct.textContent = percent + '%';
+    if (p.label) label.textContent = p.label;
+  }
+
+  // Fallback animation until real progress arrives
+  let faux = 0;
+  const timer = setInterval(() => {
+    if (lastPct >= 98) { clearInterval(timer); return; }
+    faux = Math.min(lastPct + 5, Math.min(90, faux + 2));
+    if (faux > lastPct) apply({ percent: faux, label: label.textContent });
+  }, 220);
+
+  // If the environment injected an api (unlikely with contextIsolation), use it.
+  // Otherwise listen via postMessage bridge from main.
+  try {
+    // Electron with nodeIntegration=false + contextIsolation=true: we rely on
+    // process.contextIsolated check via internal ipcRenderer polyfill.
+    // Simpler: use the global `electron` only if available, else noop.
+  } catch {}
+
+  // Listen for IPC via a small helper: main.js sends on webContents, and the
+  // default behavior fires DOM 'message' events on nodeIntegration. Since we have
+  // contextIsolation without preload, we also accept a window 'message' fallback
+  // dispatched by main via executeJavaScript if needed.
+  window.addEventListener('splash-progress', (e) => apply(e.detail));
+  window.addEventListener('splash-done', () => {
+    apply({ percent: 100, label: 'Ready.' });
+    wrap.classList.add('hide');
+  });
+</script>
+</body>
+</html>
