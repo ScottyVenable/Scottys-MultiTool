@@ -4,8 +4,9 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp, LayoutGrid
+  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles
 } from 'lucide-react'
+import WelcomeScreen from './components/WelcomeScreen'
 import Dashboard from './components/Dashboard'
 import MacroManager from './components/MacroManager'
 import HotkeyManager from './components/HotkeyManager'
@@ -41,6 +42,7 @@ import { AuthProvider, useAuth } from './components/Auth/AuthContext'
 import AuthGate from './components/Auth/AuthGate'
 
 const NAV = [
+  { id: 'welcome',       label: 'Welcome',         icon: Sparkles,        section: 'main' },
   { id: 'dashboard',     label: 'Dashboard',      icon: LayoutDashboard, section: 'main' },
   { id: 'search',        label: 'Global Search',   icon: Search,          section: 'main' },
   { id: 'macros',        label: 'Macros',          icon: Zap,             section: 'automation' },
@@ -79,6 +81,7 @@ const SECTIONS = [
 ]
 
 const PAGE_MAP = {
+  welcome: WelcomeScreen,
   dashboard: Dashboard,
   search: GlobalSearch,
   macros: MacroManager,
@@ -140,7 +143,7 @@ function SidebarUser({ onNavigate }) {
 
 function MainApp() {
   const { user } = useAuth()
-  const [page, setPage] = useState(() => user?.preferences?.defaultPage || 'dashboard')
+  const [page, setPage] = useState(() => user?.preferences?.defaultPage || 'welcome')
   const [macroCounts, setMacroCounts] = useState(0)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const isElectron = !!window.api
