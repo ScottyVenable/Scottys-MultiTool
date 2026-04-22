@@ -52,7 +52,7 @@ export default function MediaLibrary() {
 
   const attachToChat = (item) => {
     if (item.type === 'image') {
-      attachToAI({ type: 'image', path: item.relPath, name: item.filename, dataUrl: `file:///${item.relPath.replace(/\\/g, '/')}` })
+      attachToAI({ type: 'image', path: item.relPath, name: item.filename, dataUrl: `media:///${item.relPath.replace(/\\/g, '/')}` })
       toast.show({ type: 'success', title: 'Attached', message: `${item.filename} → Chat` })
     } else {
       toast.show({ type: 'warning', message: 'Only images can be attached to AI right now.' })
@@ -98,7 +98,7 @@ export default function MediaLibrary() {
           <div key={m.id} className="card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }} onClick={() => setPreview(m)}>
             <div style={{ aspectRatio: '1', background: 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {m.type === 'image'
-                ? <img src={`file:///${m.relPath.replace(/\\/g, '/')}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={m.filename} />
+                ? <img src={`media:///${m.relPath.replace(/\\/g, '/')}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={m.filename} />
                 : <TypeIcon type={m.type} size={32} />
               }
             </div>
@@ -119,9 +119,9 @@ export default function MediaLibrary() {
             </div>
             <div className="modal-body">
               <div style={{ background: 'var(--bg-3)', borderRadius: 6, padding: 8, marginBottom: 12, textAlign: 'center', maxHeight: 400, overflow: 'hidden' }}>
-                {preview.type === 'image' && <img src={`file:///${preview.relPath.replace(/\\/g, '/')}`} style={{ maxWidth: '100%', maxHeight: 380 }} />}
-                {preview.type === 'video' && <video src={`file:///${preview.relPath.replace(/\\/g, '/')}`} controls style={{ maxWidth: '100%', maxHeight: 380 }} />}
-                {preview.type === 'audio' && <audio src={`file:///${preview.relPath.replace(/\\/g, '/')}`} controls style={{ width: '100%' }} />}
+                {preview.type === 'image' && <img src={`media:///${preview.relPath.replace(/\\/g, '/')}`} style={{ maxWidth: '100%', maxHeight: 380 }} />}
+                {preview.type === 'video' && <video src={`media:///${preview.relPath.replace(/\\/g, '/')}`} controls style={{ maxWidth: '100%', maxHeight: 380 }} />}
+                {preview.type === 'audio' && <audio src={`media:///${preview.relPath.replace(/\\/g, '/')}`} controls style={{ width: '100%' }} />}
                 {preview.type === 'other' && <div className="text-muted text-sm" style={{ padding: 40 }}>No preview available</div>}
               </div>
               <div className="form-group">

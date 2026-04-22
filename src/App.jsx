@@ -36,6 +36,8 @@ import ComponentsPage from './components/ComponentsPage'
 import IDE from './components/IDE'
 import MediaPlayerBar from './components/MediaPlayerBar'
 import { ToastProvider } from './components/Toast'
+import { NotificationsProvider } from './components/NotificationsContext'
+import NotificationsCenter from './components/NotificationsCenter'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
 import CommandPalette from './components/CommandPalette'
@@ -249,6 +251,7 @@ function MainApp() {
             <span className="topbar-title">{NAV.find(n => n.id === page)?.label}</span>
           </div>
           <div className="topbar-right">
+            <NotificationsCenter onNavigate={setPage} />
             <button className="win-btn" onClick={() => isElectron && window.api.window.minimize()}><Minus size={12} /></button>
             <button className="win-btn" onClick={() => isElectron && window.api.window.maximize()}><Square size={11} /></button>
             <button className="win-btn close" onClick={() => isElectron && window.api.window.close()}><X size={12} /></button>
@@ -271,11 +274,13 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <AIAttachmentProvider>
-          <AuthGate>
-            <MainApp />
-          </AuthGate>
-        </AIAttachmentProvider>
+        <NotificationsProvider>
+          <AIAttachmentProvider>
+            <AuthGate>
+              <MainApp />
+            </AuthGate>
+          </AIAttachmentProvider>
+        </NotificationsProvider>
       </ToastProvider>
     </AuthProvider>
   )

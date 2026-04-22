@@ -4,6 +4,7 @@ import { MarkdownRenderer } from '../utils/markdown'
 import { useToast } from './Toast'
 import { useAIAttachments } from '../utils/aiAttachment'
 import { safeCall, logError } from '../utils/logger'
+import { useAuth } from './Auth/AuthContext'
 
 const DEFAULT_SYSTEM_PROMPT = `You are MacroBot AI, an expert assistant for creating keyboard macros, hotkeys, and Windows automation.
 
@@ -24,6 +25,8 @@ const SUGGESTIONS = [
 
 function ChatTab({ aiConfig }) {
   const toast = useToast()
+  const { user } = useAuth()
+  const userInitial = (user?.displayName || user?.username || 'S').trim().charAt(0).toUpperCase() || 'S'
   const { attachments, remove, clear } = useAIAttachments()
   const [messages, setMessages] = useState([
     { id: 0, role: 'ai', content: "Hello! I'm your AI automation assistant. Ask me anything or try a suggestion below." }
@@ -89,7 +92,14 @@ function ChatTab({ aiConfig }) {
         topP: aiConfig.topP,
       })
       clear()
-      setMessages(m => [...m, { id: Date.now(), role: 'ai', content: result.success ? result.content : `**Error:** ${result.error}` }])
+      if (result.success) {
+        setMessages(m => [...m, { id: Date.now(), role: 'ai', content: result.content }])
+      } else {
+        const bullets = (result.guidance || []).map(g => `\n- ${g}`).join('')
+        const title = result.code === 'AI_ENDPOINT_OFFLINE' ? 'Cannot reach the AI server' : 'AI error'
+        const body = `**${title}**\n\n${result.error}${bullets ? '\n\n**Try this:**' + bullets : ''}\n\n_See Help → AI for setup steps._`
+        setMessages(m => [...m, { id: Date.now(), role: 'ai', content: body, isError: true }])
+      }
     } catch (e) {
       logError('chat.send', e, toast)
       setMessages(m => [...m, { id: Date.now(), role: 'ai', content: `**Error:** ${e.message}` }])
@@ -101,7 +111,11 @@ function ChatTab({ aiConfig }) {
       <div className="chat-messages" style={{ flex: 1 }}>
         {messages.map(msg => (
           <div key={msg.id} className={`chat-msg ${msg.role}`}>
-            <div className="chat-avatar">{msg.role === 'user' ? 'S' : <Bot size={12} />}</div>
+            <div className="chat-avatar">
+              {msg.role === 'user'
+                ? (user?.avatarDataUrl ? <img src={user.avatarDataUrl} alt="" /> : userInitial)
+                : <Bot size={16} />}
+            </div>
             <div className="chat-bubble">
               {msg.role === 'ai' ? <MarkdownRenderer content={msg.content} /> : <span>{msg.content}</span>}
               {msg.attached?.length > 0 && <div className="text-xs text-muted mt-4"><Paperclip size={9} /> {msg.attached.join(', ')}</div>}
@@ -110,7 +124,7 @@ function ChatTab({ aiConfig }) {
         ))}
         {loading && (
           <div className="chat-msg ai">
-            <div className="chat-avatar"><Bot size={12} /></div>
+            <div className="chat-avatar"><Bot size={16} /></div>
             <div className="chat-bubble"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}><Loader size={12} className="animate-spin" /> Thinking...</span></div>
           </div>
         )}

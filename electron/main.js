@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, clipboard, screen, Notification, dialog, shell: electronShell, desktopCapturer, session } = require('electron')
+const { app, BrowserWindow, ipcMain, globalShortcut, clipboard, screen, Notification, dialog, shell: electronShell, desktopCapturer, session, protocol } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
@@ -9,6 +9,14 @@ const { WebSocketServer } = require('ws')
 const authLib = require('./auth')
 
 const isDev = process.argv.includes('--dev')
+
+// Register the custom media:// scheme as privileged so <video>/<audio> can
+// stream from it (range requests, CORS-safe). Must happen before app.ready.
+try {
+  protocol.registerSchemesAsPrivileged([
+    { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } },
+  ])
+} catch {}
 
 // ─── Persistent Storage ───────────────────────────────────────────────────────
 const userData = app.getPath('userData')
@@ -1314,6 +1322,38 @@ Write-Output ([string]$r)`
 
 
 ipcMain.handle('ai:query', async (_, { prompt, endpoint, apiKey, model, images, temperature, maxTokens, topP, systemPrompt, useContext, responseFormat }) => {
+  // Translate raw network/HTTP errors into a structured object so the UI can
+  // render actionable guidance (docs link, common fixes) rather than a naked
+  // "ECONNREFUSED" string.
+  const diagnoseConnection = (raw) => {
+    const msg = String(raw?.message || raw || '')
+    const code = raw?.code || ''
+    const isLocal = /127\.0\.0\.1|localhost/i.test(String(endpoint || ''))
+    const base = endpoint || 'https://api.openai.com'
+    if (code === 'ECONNREFUSED' || /ECONNREFUSED/i.test(msg)) {
+      return {
+        code: 'AI_ENDPOINT_OFFLINE',
+        error: isLocal
+          ? `Can't reach ${base}. LM Studio (or your local server) isn't responding.`
+          : `Can't reach ${base}. The server refused the connection.`,
+        guidance: isLocal
+          ? ['Open LM Studio → Developer tab → "Start Server".',
+             'Verify the port matches your settings (default http://localhost:1234).',
+             'If you use a firewall, allow Node/Electron to connect to localhost.']
+          : ['Check the endpoint URL in Settings → AI.',
+             'Verify your internet connection and that the server is up.'],
+        docsHint: 'help#ai',
+      }
+    }
+    if (code === 'ENOTFOUND' || /ENOTFOUND|getaddrinfo/i.test(msg)) {
+      return { code: 'AI_DNS', error: `Host not found: ${base}`, guidance: ['Double-check the endpoint URL for typos.', 'Verify DNS / internet access.'], docsHint: 'help#ai' }
+    }
+    if (code === 'ETIMEDOUT' || /timed out/i.test(msg)) {
+      return { code: 'AI_TIMEOUT', error: 'The model took too long to respond.', guidance: ['Try a smaller model or shorter prompt.', 'Check CPU/GPU usage in LM Studio.'], docsHint: 'help#ai' }
+    }
+    return { code: 'AI_UNKNOWN', error: msg || 'Unknown error', guidance: [], docsHint: 'help#ai' }
+  }
+
   return new Promise(async (resolve) => {
     try {
       const baseUrl = endpoint || 'https://api.openai.com'
@@ -1366,16 +1406,16 @@ ipcMain.handle('ai:query', async (_, { prompt, endpoint, apiKey, model, images, 
         res.on('end', () => {
           try {
             const p = JSON.parse(data)
-            if (p.error) return resolve({ success: false, error: p.error?.message || JSON.stringify(p.error) })
+            if (p.error) return resolve({ success: false, code: 'AI_API_ERROR', error: p.error?.message || JSON.stringify(p.error), guidance: ['The model server returned an error response. Check model name and request parameters.'], docsHint: 'help#ai' })
             resolve({ success: true, content: p.choices?.[0]?.message?.content || data })
           }
-          catch { resolve({ success: false, error: data.slice(0, 300) }) }
+          catch { resolve({ success: false, code: 'AI_BAD_RESPONSE', error: data.slice(0, 300), guidance: ['The server returned non-JSON data. Is the endpoint actually an OpenAI-compatible API?'], docsHint: 'help#ai' }) }
         })
       })
-      req.on('error', (e) => resolve({ success: false, error: e.message }))
-      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Request timed out after 120s' }) })
+      req.on('error', (e) => resolve({ success: false, ...diagnoseConnection(e) }))
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, code: 'AI_TIMEOUT', error: 'Request timed out after 120s', guidance: ['Try a smaller model.', 'Increase resources allocated to LM Studio.'], docsHint: 'help#ai' }) })
       req.write(body); req.end()
-    } catch (e) { resolve({ success: false, error: e.message }) }
+    } catch (e) { resolve({ success: false, ...diagnoseConnection(e) }) }
   })
 })
 
@@ -2100,6 +2140,24 @@ app.whenReady().then(() => {
   if (!process.env.MACROBOT_TEST) createSplash()
   createWindow()
   try { require('./chrome-cdp').registerIpc(ipcMain, app) } catch (e) { console.error('cdp register failed', e) }
+  // Expose imported media to the renderer via a custom protocol. Using file://
+  // directly is blocked by Electron's default webSecurity, which is why images
+  // weren't rendering in the Media Library.
+  try {
+    const mediaRoot = path.join(app.getPath('userData'), 'media')
+    protocol.registerFileProtocol('media', (request, cb) => {
+      try {
+        const rel = decodeURIComponent(request.url.replace(/^media:\/\//, ''))
+        // Accept either a bare filename (media://<name>) or an absolute path
+        // (media:///C:/...) for backward-compat with stored entries.
+        let resolved
+        if (/^[a-zA-Z]:[\\/]/.test(rel)) resolved = rel
+        else if (rel.startsWith('/')) resolved = rel.slice(1)
+        else resolved = path.join(mediaRoot, rel)
+        cb({ path: resolved })
+      } catch (e) { cb({ error: -6 }) }
+    })
+  } catch (e) { console.error('media protocol register failed', e) }
 })
 app.on('window-all-closed', () => { globalShortcut.unregisterAll(); if (process.platform !== 'darwin') app.quit() })
 app.on('will-quit', () => {
