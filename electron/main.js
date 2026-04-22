@@ -1661,6 +1661,95 @@ ipcMain.handle('cli:open', () => {
   return true
 })
 
+// ─── Companion Server (background Node process) ──────────────────────────────
+// Manages the local server under server/index.js. The renderer can start/stop
+// it and polls `server:status` for the bottom status bar pill. We also ping
+// /health from the main process and broadcast `server:state` to the UI so the
+// pill updates without polling.
+const SERVER_PORT = Number(process.env.SCOTTY_SERVER_PORT || 4455)
+let serverProc = null
+let serverState = { state: 'idle', port: SERVER_PORT, lastOk: 0, error: null }
+
+function broadcastServerState() {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try { w.webContents.send('server:state', serverState) } catch {}
+  }
+}
+
+function pingServer() {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port: SERVER_PORT, path: '/health', timeout: 1500 }, (res) => {
+      let body = ''
+      res.on('data', (c) => { body += c })
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          try { resolve({ ok: true, data: JSON.parse(body) }) }
+          catch { resolve({ ok: true, data: null }) }
+        } else resolve({ ok: false, error: `HTTP ${res.statusCode}` })
+      })
+    })
+    req.on('error', (e) => resolve({ ok: false, error: e.code || e.message }))
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }) })
+  })
+}
+
+async function refreshServerState() {
+  const wasRunning = !!serverProc
+  const r = await pingServer()
+  if (r.ok) {
+    serverState = { state: 'connected', port: SERVER_PORT, lastOk: Date.now(), error: null, info: r.data }
+  } else if (wasRunning) {
+    serverState = { ...serverState, state: 'connecting', error: r.error }
+  } else {
+    serverState = { ...serverState, state: 'idle', error: null }
+  }
+  broadcastServerState()
+}
+
+ipcMain.handle('server:getPort', () => SERVER_PORT)
+ipcMain.handle('server:status', async () => { await refreshServerState(); return serverState })
+
+ipcMain.handle('server:start', async () => {
+  if (serverProc) return { ok: true, alreadyRunning: true, pid: serverProc.pid }
+  const script = path.join(__dirname, '..', 'server', 'index.js')
+  if (!fs.existsSync(script)) return { ok: false, error: 'server/index.js not found' }
+  try {
+    serverProc = spawn(process.execPath, [script], {
+      cwd: path.join(__dirname, '..'),
+      env: { ...process.env, SCOTTY_SERVER_PORT: String(SERVER_PORT), ELECTRON_RUN_AS_NODE: '1' },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    serverState = { ...serverState, state: 'connecting', error: null }
+    broadcastServerState()
+    const onData = (buf) => { try { process.stdout.write('[server] ' + buf.toString()) } catch {} }
+    serverProc.stdout?.on('data', onData)
+    serverProc.stderr?.on('data', onData)
+    serverProc.on('exit', (code) => {
+      serverProc = null
+      serverState = { ...serverState, state: 'idle', error: code ? `exit ${code}` : null }
+      broadcastServerState()
+    })
+    setTimeout(refreshServerState, 600)
+    return { ok: true, pid: serverProc.pid }
+  } catch (e) {
+    serverProc = null
+    serverState = { ...serverState, state: 'idle', error: e.message }
+    broadcastServerState()
+    return { ok: false, error: e.message }
+  }
+})
+
+ipcMain.handle('server:stop', async () => {
+  if (!serverProc) return { ok: true, alreadyStopped: true }
+  try { serverProc.kill() } catch {}
+  return { ok: true }
+})
+
+// Poll server state every 5s so the UI stays in sync if the user started the
+// server externally (via launcher.ps1).
+setInterval(() => { refreshServerState().catch(() => {}) }, 5000)
+
 // ─── Screen Capture (Computer Use Agent) ──────────────────────────────────────
 ipcMain.handle('screen:sources', async () => {
   const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 180 } })

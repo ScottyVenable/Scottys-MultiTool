@@ -152,6 +152,12 @@ contextBridge.exposeInMainWorld('api', {
   cli: {
     open: () => ipcRenderer.invoke('cli:open'),
   },
+  server: {
+    status: () => ipcRenderer.invoke('server:status'),
+    start: () => ipcRenderer.invoke('server:start'),
+    stop: () => ipcRenderer.invoke('server:stop'),
+    getPort: () => ipcRenderer.invoke('server:getPort'),
+  },
   shellIntegration: {
     register: (exts) => ipcRenderer.invoke('shell:registerFileAssoc', exts),
     unregister: (exts) => ipcRenderer.invoke('shell:unregisterFileAssoc', exts),

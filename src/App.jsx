@@ -35,6 +35,7 @@ import GlobalSearch from './components/GlobalSearch'
 import ComponentsPage from './components/ComponentsPage'
 import IDE from './components/IDE'
 import MediaPlayerBar from './components/MediaPlayerBar'
+import StatusBar from './components/StatusBar'
 import { ToastProvider } from './components/Toast'
 import { NotificationsProvider } from './components/NotificationsContext'
 import NotificationsCenter from './components/NotificationsCenter'
@@ -264,6 +265,7 @@ function MainApp() {
           </ErrorBoundary>
         </main>
         <MediaPlayerBar />
+        <StatusBar />
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={setPage} />
     </div>
