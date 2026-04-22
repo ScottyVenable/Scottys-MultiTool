@@ -1,54 +1,35 @@
-## ✅ Completed in this session
+# Todo
 
-- Welcome tab as its own component — `0246c7fe` / `a998c0cc`
-- Logo + wordmark + concepts doc — `781a8827`
-- Detachable CLI window — `3a469d07`
-- Browser splash overlay — `72bc0f35`
-- Chore households, members, month calendar — `c0a92d92`
-- Chore auto-reminders + scoped leaderboard — `d51de3ef`
-- Windows Open-With registration — `0e66f3f7`
-- Component marketplace (`.mbcomp` + GitHub import) — `f46e346b`
-- Visual create wizard — `d7a43b0b`
-- Monaco IDE with file tree, terminal, AI panel — `f60f968e`
-- Chrome DevTools Protocol target — `867e0b2d`
+## Next
 
----
+- Local server + launcher CLI (menu to run tests, start app, start server, tail logs) with dedicated console and structured logging. App gets a bottom status bar with server-state pill (red / yellow / green) and other component indicators.
+- Browser takes over most of the screen: pinned-component sidebar on the left, compact header with controls, exit button back to main menu, splash before entering, and a "fetched info" summary surface with a "View in Browser" action.
+- Fix the occasional security / suspicious-content warning the browser shows when fetching remote info.
+- Universal currency + challenges: earn coins from focus sessions / chores / reminders / daily challenges, spend in a small rewards panel, pill in topbar. Local-only until the social layer lands.
 
-- Make sure to commit after every major update you do if tested and then push on main origin.
-- Create a splash screen for the application itself upon signing in, transforming the Dashboard into a Welcome Screen with some basic information, news, tips, with a "Welcome {Users Name}!" or even a dynamic subtitle that changes like "Ready to {action here}" like "Ready to browse?" "ready to plan?", "ready to focus?", etc that encompasses all component types. The "Ready to" should stay stagnant, but the action word should fade/animate in and out with different words and in different colors.
-- Expand the Computer Use for the AI Agent and make there be an option to connect a window like Chrome and connect to the debug tools automatically and uses that information in the code to control the browser similar to how Claude performs computer use in Google Chrome. Make sure to add error handling, logging, etc. for it. It can pick from active Google Chrome windows. Once that is integrated, see if it is possible to connect it to other apps or to its own command line interface.
-- Expand on the CLI to make it it's own CLI with the ability to detatch it as its own small window and similar to how CLI's like the Claude and Gemini CLI's function.
-- Have the browser take over most of the screen, with a small sidebar on the left for pinning a chosen component and a small header at the top for important information and controls if needed. Make sure to make it look nice and be functional (I do like how it is so far, it's just that it is containined in a small sub window). There should be a button to exit the browser and go back to the main menu. Perhaps there is a splash screen before entering the actual browser with some features like some tips, news, etc. and then you click a button to enter the browser. Any fetched information should be integrated into this screen with it's own UI before entering the browser. For example, if it fetches some information from the web, it can show a summary of that information with a button to "View in Browser" and then when you click that button, it takes you to the browser and shows that information in a nice format.
-- Add to the chore app the ability to assign a chore to another user. Which would also require an ability to add users as "Friends". Users can then create their own "Household" in the chore app and invite their friends to that household. Then they can assign chores to each other and see a list of all the chores in the household. They can also have a calendar view of the chores and a notification system to remind them of their chores. This would make the chore app more social and collaborative. Expand on this feature.
-- Add the component marketplace where users can share their created components with the community. Users can upload their components to the marketplace and other users can browse and download them. There should be a rating and review system for the components in the marketplace. This would encourage users to create high quality components and also allow users to easily find and use components created by others.
-- Add the ability for users to create their own custom components using a visual editor. This would allow users to create components without needing to know how to code. The visual editor would have a drag and drop interface where users can add different elements and define their behavior. This would make it easier for non-technical users to create their own components and customize their experience. There is an option to code it if need be.
-- Create an expansive core component that is a full "IDE" similar to VSCode that integrates with the AI Agent and allows users to create their own codebases and projects with code. This IDE would have features like syntax highlighting, code completion, debugging tools, etc. It would also have a built-in terminal and the ability to run and test components directly within the IDE. This would be a powerful tool for advanced users who want to create highly customized applications, edit code files, or create complex coding projects.
-- Integrate use with Windows for right click recognition on certain files "Open with" as well as the ability to send files to the app. For example, if you right click on a text file and choose "Open with Scotty MacroBot", it could open that file in the app and the AI Agent could analyze the contents of the file and provide insights or actions based on that content. This would allow for a more seamless integration with the operating system and make it easier for users to interact with their files using the AI Agent.
-- Plan an idea for a logo for this Multitool. It should fit the minimalist and modern aesthetic of the app. Since Scotty Multitool is a temporary name, the logo should be versatile enough to work with a potential name change in the future. It should also convey the idea of a powerful, all-in-one tool that can help users with a wide range of tasks. Consider using simple geometric shapes or abstract symbols that represent versatility, intelligence, and efficiency. Then plan an idea for the application title header in the app itself. It should match the aesthetic of the logo and overall design of the app. It should be simple, clean, and modern. It could be just the name of the app in a nice font, or it could incorporate some design elements from the logo. The header should be prominently displayed on the main menu and possibly on other screens as well. Then a combined idea for the logo and title header together horizontal for the top of the app, making sure they complement each other and create a cohesive visual identity for the app. Then create a file that contains AI image generation prompts for each logo for me to generate.
-- Create a better error message for when the AI is not connected to LM Studio or when there is an issue with the connection. The error message should be clear and informative, providing guidance on how to resolve the issue. It could include steps to check the connection, ensure that LM Studio is running, and verify that the correct settings are configured. Additionally, it could provide a link to a support page or contact information for further assistance (maybe the docs tab since we dont have a website yet). This would help users troubleshoot connection issues more effectively and improve their overall experience with the app.
-- Round the AI and User icons in the AI chat and make them a tiny bit bigger. Also make sure the user's profile photo is consistent across all components that use a user icon.
-- Add a Messages or Notifications center where users can see important updates, messages from other users, or notifications about their tasks and activities. This center could be accessed from a bell icon or message icon in the header and would provide a centralized location for users to stay informed about what's happening within the app and connecting with people. It could include different categories for messages, such as "Task Updates", "System Notifications", etc. for the Notifications and its own seperate button and menu for Messages with the option to click on messages recieved and open them in a full component view in the main view. This integration would help users stay organized and ensure they don't miss any important information as well as communicate between friends, family, households, etc.
-- Expand connectedness by integrating social features into various components like the chore app, calendar, etc. Focus timer (see below)
-- For the focus timer, there could be an option to "Focus with Friends" where users can invite their friends to join them in a focus session. This would create a shared timer that all participants can see and interact with. Users could send encouraging messages to each other during the session, and there could be a leaderboard or achievement system to make it more engaging. This would add a social aspect to the focus timer and help users stay motivated while working together with their friends. There is also an integration that says "{User's Name} is focusing on {Application name or task}" with the ability for the User to allow permissions to see what application or task they are focusing on and then that information is shared in the "Focus with Friends" feature so that friends can see what each other are working on and potentially join in if they are working on similar tasks or just for moral support. Maybe dynamic status updates that friends can see like "Scotty is [playing] [game name]", "Scotty is [focusing] on [application or task name]", "Scotty is [relaxing]" etc. with the ability for the user to customize these status updates and choose what information they want to share with their friends. Add some really cute interactions features when focusing. Maybe penalties when a person stops a timer, or when a shared focus session starts, in order to pause the focus timer for everyone, everyone in the has to all approve. There could also be rewards for completing focus sessions, such as points or badges that users can earn and share with their friends. This would make the focus timer more fun and interactive, while also helping users stay motivated and connected with their friends. (Maybe a universal "currency" system for the entire app across components??)
-- Create a universal "currency" for the app that users can earn with badges, focus sessions, completing tasks, and integrate dynamic challenges. There can be daily challenges, weekly challenges, and monthly challenges that users can complete to earn extra currency. These challenges could be related to productivity, such as "Complete 3 focus sessions this week" or "Organize your calendar for the month". Users could also create their own custom challenges and invite their friends to join them. The currency could then be used in a marketplace to redeem rewards, such as custom themes, profile customization options, or even physical merchandise. This would add an extra layer of motivation and engagement for users across all components of the app. The currency could then be used to purchase items in the marketplace, such as custom themes, profile customization options (like maybe "Titles" similar to what they have in Overwatch 2?). This would add an extra layer of motivation and engagement for users across all components of the app. Users can also gift their friends currency as well to encourage and support each other in their productivity journeys. This would create a sense of community and friendly competition within the app, while also providing tangible rewards for users' efforts and achievements. The currency could be two types. One is earned through usage of the app, another is premium either purchased in real life, earned through referrals, or earned upon completion of certain challenges. The premium currency could be used to purchase exclusive items in the marketplace, such as unique themes, profile customization options, or even physical merchandise. This would provide an additional incentive for users to engage with the app and share it with their friends, while also offering a way to support the development of the app through purchases. It's important to ensure that the premium currency offers valuable and desirable rewards without creating a pay-to-win environment, so that all users can enjoy the benefits of the app regardless of their spending habits.
-- Improve the splash screen. The dashboard below should not be there. The Welcome Screen should be it's own tab and window component. Improve the look of the Welcome screen with better animations and effects if possible.
-- Fix the errors where the browser shows a security or suspicious warning when trying to fetch information from the web.
+## Needs server (scaffold once local server exists)
 
----
+- Friends list + presence (dynamic status like "focusing on ...", "playing ...", "relaxing").
+- Household invites and chore assignment across friends.
+- Messages center (separate from notifications bell) with click-to-open conversation view.
+- Focus-with-friends: shared timers, quorum-pause, leaderboards, badges.
+- Premium currency tier + referral rewards.
 
-- Uploaded photos/media are not rendering in the Media Library.
-- implement abili
+## Known bugs
 
+- VS Code `ptyHost heartbeat` / `ERR_NETWORK_IO_SUSPENDED` - not this app; occurs in the editor while offline.
 
-# Bugs
+## Done
 
-**When "Getting Updates"**
-```
-2026-04-22 10:09:32.049 [warning] No ptyHost heartbeat after 6 seconds
-2026-04-22 10:09:32.050 [info] update#setState checking for updates
-2026-04-22 10:09:32.083 [error] #15: https://update.code.visualstudio.com/api/update/win32-x64-user/stable/560a9dba96f961efea7b1612916f89e5d5d4d679?bg=true&u=none - error undefined net::ERR_NETWORK_IO_SUSPENDED
-2026-04-22 10:09:32.084 [error] Error: net::ERR_NETWORK_IO_SUSPENDED
-    at SimpleURLLoaderWrapper.<anonymous> (node:electron/js2c/browser_init:2:131694)
-    at SimpleURLLoaderWrapper.emit (node:events:519:28)
-2026-04-22 10:09:32.086 [info] update#setState idle
-```
+- Welcome tab as its own component - 0246c7fe / a998c0cc
+- Logo + wordmark + concepts doc - 781a8827
+- Detachable CLI window - 3a469d07
+- Browser splash overlay - 72bc0f35
+- Chore households, members, month calendar - c0a92d92
+- Chore auto-reminders + scoped leaderboard - d51de3ef
+- Windows Open-With registration - 0e66f3f7
+- Component marketplace (.mbcomp + GitHub import) - f46e346b
+- Visual create wizard - d7a43b0b
+- Monaco IDE with file tree, terminal, AI panel - f60f968e
+- Chrome DevTools Protocol target - 867e0b2d
+- Media Library rendering, LM Studio error banner, rounded chat avatars, Notifications Center - 24652326
