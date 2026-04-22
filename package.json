@@ -1,0 +1,45 @@
+{
+  "name": "scotty-macrobot",
+  "version": "1.0.0",
+  "description": "Local macro and automation manager for power users",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron . --dev\"",
+    "build": "vite build",
+    "start": "electron .",
+    "test:e2e": "playwright test",
+    "package": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.9.1",
+    "lucide-react": "^0.309.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vite": "^5.1.0",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.scotty.macrobot",
+    "productName": "Scotty's Multitool",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "mobile/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.ico"
+    }
+  }
+}
