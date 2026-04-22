@@ -318,6 +318,81 @@ function describeAction(action) {
   }
 }
 
+// Chrome DevTools Protocol control panel. Lets the user launch a CDP-enabled
+// Chrome/Edge instance, attach to it, navigate, and capture a screenshot —
+// entirely separate from the desktop agent loop so either surface can be
+// exercised independently.
+function ChromeCDPPanel() {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState('idle')
+  const [detect, setDetect] = useState(null)
+  const [attached, setAttached] = useState(false)
+  const [url, setUrl] = useState('https://www.google.com')
+  const [shot, setShot] = useState(null)
+  const hasApi = !!window.api?.cdp
+
+  const doDetect = async () => {
+    if (!hasApi) return
+    const d = await safeCall(() => window.api.cdp.detect(), { where: 'cdp.detect', toast })
+    setDetect(d)
+  }
+
+  const launch = async () => {
+    setStatus('launching')
+    const r = await safeCall(() => window.api.cdp.launch({ url }), { where: 'cdp.launch', toast })
+    if (r?.ok) { setStatus('running'); const a = await safeCall(() => window.api.cdp.attach({}), { where: 'cdp.attach', toast }); if (a?.ok) setAttached(true) }
+    else setStatus('idle')
+  }
+  const attach = async () => {
+    const r = await safeCall(() => window.api.cdp.attach({}), { where: 'cdp.attach', toast })
+    if (r?.ok) { setAttached(true); setStatus('running') }
+  }
+  const navigate = async () => {
+    await safeCall(() => window.api.cdp.navigate({ url }), { where: 'cdp.navigate', toast })
+  }
+  const screenshot = async () => {
+    const r = await safeCall(() => window.api.cdp.screenshot(), { where: 'cdp.screenshot', toast })
+    if (r?.ok) setShot(r.dataUrl)
+  }
+  const close = async () => {
+    await safeCall(() => window.api.cdp.close(), { where: 'cdp.close', toast })
+    setAttached(false); setStatus('idle'); setShot(null)
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 0, background: 'var(--bg-2)' }}>
+      <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'space-between', padding: '8px 12px', fontSize: 12 }}
+        onClick={() => { setOpen(o => !o); if (!detect) doDetect() }}>
+        <span>🌐 Chrome CDP target {attached && <span style={{ color: 'var(--green)', marginLeft: 8 }}>• attached</span>}</span>
+        <span style={{ color: 'var(--text-3)' }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)' }}>
+          <div className="text-xs" style={{ color: 'var(--text-2)' }}>
+            {detect?.ok ? <>Chrome at <span className="mono">{detect.path}</span></> : 'Detecting Chrome…'}
+            {detect && !detect.hasLib && <span style={{ color: 'var(--red)' }}> — chrome-remote-interface missing</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input flex-1" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" style={{ fontSize: 12 }} />
+            {!attached
+              ? <>
+                  <button className="btn btn-primary btn-sm" onClick={launch} disabled={!detect?.ok}><Play size={12} /> Launch</button>
+                  <button className="btn btn-secondary btn-sm" onClick={attach}>Attach</button>
+                </>
+              : <>
+                  <button className="btn btn-secondary btn-sm" onClick={navigate}>Go</button>
+                  <button className="btn btn-secondary btn-sm" onClick={screenshot}>Screenshot</button>
+                  <button className="btn btn-danger btn-sm" onClick={close}><Square size={12} /> Close</button>
+                </>}
+          </div>
+          {shot && <img src={shot} alt="cdp" style={{ maxHeight: 220, border: '1px solid var(--border)', borderRadius: 4, alignSelf: 'flex-start' }} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ComputerUseTab({ aiConfig }) {
   const toast = useToast()
   const [goal, setGoal] = useState('')
@@ -567,6 +642,8 @@ function ComputerUseTab({ aiConfig }) {
           <span style={{ minWidth: 44, color: 'var(--text-1)', fontFamily: 'var(--mono)' }}>{(stepDelay / 1000).toFixed(2)}s</span>
         </div>
       )}
+
+      <ChromeCDPPanel />
 
       <div className="flex gap-8">
         <input className="input flex-1" value={goal} onChange={e => setGoal(e.target.value)}

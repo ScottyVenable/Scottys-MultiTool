@@ -134,6 +134,16 @@ contextBridge.exposeInMainWorld('api', {
   ide: {
     projectsDir: () => ipcRenderer.invoke('ide:projectsDir'),
   },
+  cdp: {
+    detect: () => ipcRenderer.invoke('cdp:detect'),
+    launch: (opts) => ipcRenderer.invoke('cdp:launch', opts),
+    attach: (opts) => ipcRenderer.invoke('cdp:attach', opts),
+    listTargets: () => ipcRenderer.invoke('cdp:listTargets'),
+    navigate: (opts) => ipcRenderer.invoke('cdp:navigate', opts),
+    screenshot: () => ipcRenderer.invoke('cdp:screenshot'),
+    action: (opts) => ipcRenderer.invoke('cdp:action', opts),
+    close: () => ipcRenderer.invoke('cdp:close'),
+  },
   shell: {
     spawn: () => ipcRenderer.invoke('shell:spawn'),
     write: (text) => ipcRenderer.invoke('shell:write', text),

@@ -2099,6 +2099,7 @@ app.whenReady().then(() => {
   // Skip splash in test mode to keep Playwright's firstWindow() deterministic.
   if (!process.env.MACROBOT_TEST) createSplash()
   createWindow()
+  try { require('./chrome-cdp').registerIpc(ipcMain, app) } catch (e) { console.error('cdp register failed', e) }
 })
 app.on('window-all-closed', () => { globalShortcut.unregisterAll(); if (process.platform !== 'darwin') app.quit() })
 app.on('will-quit', () => {
