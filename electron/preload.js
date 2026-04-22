@@ -111,6 +111,11 @@ contextBridge.exposeInMainWorld('api', {
     importFromGithub: (url) => ipcRenderer.invoke('marketplace:importFromGithub', url),
     export: (pack) => ipcRenderer.invoke('marketplace:export', pack),
   },
+  customComponents: {
+    list: () => ipcRenderer.invoke('customComponents:list'),
+    save: (comp) => ipcRenderer.invoke('customComponents:save', comp),
+    delete: (id) => ipcRenderer.invoke('customComponents:delete', id),
+  },
   fs: {
     homedir: () => ipcRenderer.invoke('fs:homedir'),
     readdir: (p) => ipcRenderer.invoke('fs:readdir', p),

@@ -2060,6 +2060,27 @@ ipcMain.handle('marketplace:export', async (_, pack) => {
   } catch (e) { return { success: false, error: String(e?.message || e) } }
 })
 
+// ─── Custom Components IPC (Visual Creator output) ──────────────────────────
+// These are user-authored "components" built via the form wizard. Unlike
+// marketplace packs, they live directly in the nav bar. Stored as a list at
+// `customComponents` in electron-store. Each has {id, name, icon, template,
+// config, createdAt}. No arbitrary code execution — the renderer looks up a
+// whitelisted template by name.
+ipcMain.handle('customComponents:list', () => pbGet('customComponents', []))
+ipcMain.handle('customComponents:save', (_, comp) => {
+  if (!comp?.id || !comp?.name) return { success: false, error: 'Invalid component' }
+  const list = pbGet('customComponents', [])
+  const idx = list.findIndex(c => c.id === comp.id)
+  const next = { ...comp, updatedAt: new Date().toISOString() }
+  if (idx >= 0) list[idx] = next; else list.push({ ...next, createdAt: next.updatedAt })
+  pbSet('customComponents', list)
+  return { success: true, component: next }
+})
+ipcMain.handle('customComponents:delete', (_, id) => {
+  pbSet('customComponents', pbGet('customComponents', []).filter(c => c.id !== id))
+  return { success: true }
+})
+
 app.whenReady().then(() => {
   // Skip splash in test mode to keep Playwright's firstWindow() deterministic.
   if (!process.env.MACROBOT_TEST) createSplash()

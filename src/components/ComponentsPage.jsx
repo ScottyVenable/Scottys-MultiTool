@@ -5,7 +5,7 @@ import {
   Rocket, BookOpen, AppWindow, CalendarClock, Volume2, Pipette,
   BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
   LayoutGrid, Store, Plus, Package, Sparkles, ExternalLink,
-  Download, Upload, Github, Trash2, Star
+  Download, Upload, Github, Trash2, Star, ChevronRight, Save, X
 } from 'lucide-react'
 import { useToast } from './Toast'
 
@@ -142,18 +142,7 @@ export default function ComponentsPage({ onNavigate }) {
 
       {tab === 'marketplace' && <MarketplaceTab />}
 
-      {tab === 'create' && (
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-          <Plus size={36} style={{ color: 'var(--accent)', marginBottom: 12 }} />
-          <div className="card-title" style={{ justifyContent: 'center' }}>Create a Component</div>
-          <div className="text-muted mt-8" style={{ maxWidth: 440, margin: '8px auto 0' }}>
-            Build your own custom tools using a visual editor or JSX. Export to share with the community.
-          </div>
-          <div className="mt-16" style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '6px 12px', background: 'var(--yellow-dim)', color: 'var(--yellow)', borderRadius: 999, fontSize: 12 }}>
-            <Sparkles size={12} /> Coming soon
-          </div>
-        </div>
-      )}
+      {tab === 'create' && <CreateTab />}
     </div>
   )
 }
@@ -327,3 +316,249 @@ function MarketplaceTab() {
     </div>
   )
 }
+
+// ── Create tab: a small visual wizard that builds a local component "pack" ──
+// The wizard keeps things safe: no raw JSX eval. Instead we emit a structured
+// pack that the Marketplace installer stores, and the Installed list renders
+// via a small switch over known templates. This matches the .mbcomp shape so
+// users can export the result like any other pack.
+const CREATE_TEMPLATES = [
+  { id: 'card',     label: 'Card',     description: 'A titled card with a description and an accent.' },
+  { id: 'list',     label: 'List',     description: 'A vertical list of items with optional counts.' },
+  { id: 'launcher', label: 'Launcher', description: 'A grid of clickable shortcut tiles.' },
+  { id: 'stats',    label: 'Stats',    description: 'A row of big-number metrics.' },
+  { id: 'form',     label: 'Form',     description: 'A simple form with labelled fields.' },
+]
+
+function CreateTab() {
+  const toast = useToast()
+  const [step, setStep] = useState(0)
+  const [template, setTemplate] = useState('card')
+  const [meta, setMeta] = useState({ name: '', version: '1.0.0', author: '', description: '', category: 'Custom' })
+  const [fields, setFields] = useState([{ key: 'title', value: 'My Component' }])
+  const hasApi = !!window.api
+
+  const addField = () => setFields(f => [...f, { key: `field_${f.length}`, value: '' }])
+  const setField = (i, patch) => setFields(f => f.map((x, idx) => idx === i ? { ...x, ...patch } : x))
+  const removeField = (i) => setFields(f => f.filter((_, idx) => idx !== i))
+
+  const pack = {
+    name: meta.name.trim(),
+    version: meta.version.trim() || '1.0.0',
+    author: meta.author.trim() || 'You',
+    description: meta.description.trim() || 'Custom component',
+    category: meta.category || 'Custom',
+    component: {
+      template,
+      // Config is a plain object — fields become key→value entries.
+      config: Object.fromEntries(fields.filter(f => f.key).map(f => [f.key, f.value])),
+    },
+    // A rating of 0 marks this as user-authored vs. curated.
+    rating: 0,
+  }
+
+  const save = async () => {
+    if (!pack.name) { toast.show({ type: 'error', title: 'Name required' }); return }
+    if (!hasApi) return
+    const r = await window.api.marketplace.install(pack)
+    if (r?.success) { toast.show({ type: 'success', title: 'Component saved', message: pack.name }); setStep(4) }
+    else toast.show({ type: 'error', title: 'Save failed', message: r?.error || 'Unknown error' })
+  }
+
+  const exportPack = async () => {
+    if (!pack.name) { toast.show({ type: 'error', title: 'Name required' }); return }
+    if (!hasApi) return
+    const r = await window.api.marketplace.export(pack)
+    if (r?.success) toast.show({ type: 'success', title: 'Exported', message: r.path })
+    else if (r?.error) toast.show({ type: 'error', title: 'Export failed', message: r.error })
+  }
+
+  const steps = ['Template', 'Metadata', 'Fields', 'Preview', 'Done']
+
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      {/* Step indicator */}
+      <div className="flex items-center gap-8 mb-16">
+        {steps.map((s, i) => (
+          <React.Fragment key={s}>
+            <div style={{
+              padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+              background: i === step ? 'var(--accent)' : 'var(--bg-3)',
+              color: i === step ? 'white' : 'var(--text-2)',
+              border: i < step ? '1px solid var(--accent-dim)' : '1px solid var(--border)',
+            }}>{i + 1}. {s}</div>
+            {i < steps.length - 1 && <ChevronRight size={12} style={{ color: 'var(--text-3)' }} />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {step === 0 && (
+        <div>
+          <div className="text-sm mb-12" style={{ fontWeight: 600 }}>Choose a template</div>
+          <div className="grid-2 gap-8">
+            {CREATE_TEMPLATES.map(t => (
+              <button key={t.id} onClick={() => setTemplate(t.id)}
+                className={`card component-card`}
+                style={{
+                  padding: 12, textAlign: 'left',
+                  borderColor: template === t.id ? 'var(--accent)' : 'var(--border)',
+                  background: template === t.id ? 'var(--bg-3)' : 'var(--bg-2)',
+                  cursor: 'pointer',
+                }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{t.label}</div>
+                <div className="text-xs text-muted">{t.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 1 && (
+        <div className="flex-col gap-10">
+          <div className="form-group">
+            <label className="form-label">Name</label>
+            <input className="input" value={meta.name} onChange={e => setMeta({ ...meta, name: e.target.value })} placeholder="e.g. Morning Routine" />
+          </div>
+          <div className="flex gap-8">
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Version</label>
+              <input className="input mono" value={meta.version} onChange={e => setMeta({ ...meta, version: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Author</label>
+              <input className="input" value={meta.author} onChange={e => setMeta({ ...meta, author: e.target.value })} placeholder="You" />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label className="form-label">Category</label>
+              <input className="input" value={meta.category} onChange={e => setMeta({ ...meta, category: e.target.value })} placeholder="Custom" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <textarea className="input" rows={3} value={meta.description} onChange={e => setMeta({ ...meta, description: e.target.value })} placeholder="What does this component do?" />
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div>
+          <div className="flex items-center justify-between mb-12">
+            <div className="text-sm" style={{ fontWeight: 600 }}>Fields (for the <span style={{ color: 'var(--accent)' }}>{template}</span> template)</div>
+            <button className="btn btn-secondary btn-sm" onClick={addField}><Plus size={12} /> Add field</button>
+          </div>
+          <div className="flex-col gap-6">
+            {fields.map((f, i) => (
+              <div key={i} className="flex gap-6" style={{ alignItems: 'center' }}>
+                <input className="input mono" value={f.key} onChange={e => setField(i, { key: e.target.value })} placeholder="key" style={{ maxWidth: 160 }} />
+                <input className="input" value={f.value} onChange={e => setField(i, { value: e.target.value })} placeholder="value" />
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => removeField(i)}><X size={12} /></button>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-muted mt-8">Fields become the config passed to the template renderer. For `list`, use keys like <span className="mono">items</span> separated by commas.</div>
+        </div>
+      )}
+
+      {step === 3 && (
+        <div>
+          <div className="text-sm mb-8" style={{ fontWeight: 600 }}>Preview</div>
+          <CustomComponentPreview template={template} config={pack.component.config} />
+          <div className="text-xs text-muted mt-12">Everything below will be saved to a local <span className="mono">.mbcomp</span> pack.</div>
+          <pre className="mono" style={{
+            marginTop: 8, padding: 10, background: 'var(--bg-3)', borderRadius: 'var(--r)',
+            fontSize: 11, maxHeight: 200, overflow: 'auto',
+          }}>{JSON.stringify(pack, null, 2)}</pre>
+        </div>
+      )}
+
+      {step === 4 && (
+        <div className="text-center" style={{ padding: 20 }}>
+          <Sparkles size={28} style={{ color: 'var(--accent)', margin: '0 auto 8px' }} />
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>Saved</div>
+          <div className="text-sm text-muted mb-12">Your component is installed and will appear under Installed → Marketplace.</div>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setStep(0); setMeta({ name: '', version: '1.0.0', author: '', description: '', category: 'Custom' }); setFields([{ key: 'title', value: 'My Component' }]) }}>Create another</button>
+        </div>
+      )}
+
+      {step < 4 && (
+        <div className="flex justify-between mt-16">
+          <button className="btn btn-ghost btn-sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>← Back</button>
+          <div className="flex gap-6">
+            {step === 3 && <button className="btn btn-secondary btn-sm" onClick={exportPack}><Upload size={12} /> Export .mbcomp</button>}
+            {step < 3 && <button className="btn btn-primary btn-sm" onClick={() => setStep(s => s + 1)}>Next →</button>}
+            {step === 3 && <button className="btn btn-primary btn-sm" onClick={save}><Save size={12} /> Save & Install</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Tiny sandboxed renderer for preview and Installed display. Only interprets
+// the known template ids — nothing is evaluated from strings.
+function CustomComponentPreview({ template, config }) {
+  const c = config || {}
+  if (template === 'card') {
+    return (
+      <div className="card" style={{ padding: 14, borderLeft: `3px solid var(--accent)` }}>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.title || 'Untitled'}</div>
+        <div className="text-sm text-muted">{c.description || c.body || ''}</div>
+      </div>
+    )
+  }
+  if (template === 'list') {
+    const items = String(c.items || '').split(',').map(s => s.trim()).filter(Boolean)
+    return (
+      <div className="card" style={{ padding: 14 }}>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{c.title || 'List'}</div>
+        {items.length === 0 && <div className="text-sm text-muted">(no items)</div>}
+        {items.map((it, i) => (
+          <div key={i} style={{ padding: '4px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>{it}</div>
+        ))}
+      </div>
+    )
+  }
+  if (template === 'launcher') {
+    const items = String(c.items || '').split(',').map(s => s.trim()).filter(Boolean)
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+        {items.map((it, i) => (
+          <div key={i} className="card" style={{ padding: 10, textAlign: 'center', fontSize: 12, cursor: 'pointer' }}>{it}</div>
+        ))}
+      </div>
+    )
+  }
+  if (template === 'stats') {
+    const pairs = Object.entries(c).filter(([k]) => k !== 'title')
+    return (
+      <div className="card" style={{ padding: 14 }}>
+        {c.title && <div style={{ fontWeight: 600, marginBottom: 10 }}>{c.title}</div>}
+        <div style={{ display: 'flex', gap: 16 }}>
+          {pairs.map(([k, v]) => (
+            <div key={k}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{v}</div>
+              <div className="text-xs text-muted">{k}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (template === 'form') {
+    const pairs = Object.entries(c).filter(([k]) => k !== 'title')
+    return (
+      <div className="card" style={{ padding: 14 }}>
+        {c.title && <div style={{ fontWeight: 600, marginBottom: 10 }}>{c.title}</div>}
+        {pairs.map(([k, v]) => (
+          <div key={k} className="form-group">
+            <label className="form-label">{k}</label>
+            <input className="input" defaultValue={v} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return <div className="text-sm text-muted">Unknown template: {template}</div>
+}
+
+export { CustomComponentPreview }
