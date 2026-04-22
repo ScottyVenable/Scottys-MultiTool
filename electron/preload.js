@@ -103,6 +103,14 @@ contextBridge.exposeInMainWorld('api', {
   notifications: {
     show: (opts) => ipcRenderer.invoke('notifications:show', opts),
   },
+  marketplace: {
+    list: () => ipcRenderer.invoke('marketplace:list'),
+    install: (pack) => ipcRenderer.invoke('marketplace:install', pack),
+    uninstall: (name) => ipcRenderer.invoke('marketplace:uninstall', name),
+    importFromFile: () => ipcRenderer.invoke('marketplace:importFromFile'),
+    importFromGithub: (url) => ipcRenderer.invoke('marketplace:importFromGithub', url),
+    export: (pack) => ipcRenderer.invoke('marketplace:export', pack),
+  },
   fs: {
     homedir: () => ipcRenderer.invoke('fs:homedir'),
     readdir: (p) => ipcRenderer.invoke('fs:readdir', p),

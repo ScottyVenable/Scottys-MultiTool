@@ -17,7 +17,11 @@
 - Create a universal "currency" for the app that users can earn with badges, focus sessions, completing tasks, and integrate dynamic challenges. There can be daily challenges, weekly challenges, and monthly challenges that users can complete to earn extra currency. These challenges could be related to productivity, such as "Complete 3 focus sessions this week" or "Organize your calendar for the month". Users could also create their own custom challenges and invite their friends to join them. The currency could then be used in a marketplace to redeem rewards, such as custom themes, profile customization options, or even physical merchandise. This would add an extra layer of motivation and engagement for users across all components of the app. The currency could then be used to purchase items in the marketplace, such as custom themes, profile customization options (like maybe "Titles" similar to what they have in Overwatch 2?). This would add an extra layer of motivation and engagement for users across all components of the app. Users can also gift their friends currency as well to encourage and support each other in their productivity journeys. This would create a sense of community and friendly competition within the app, while also providing tangible rewards for users' efforts and achievements. The currency could be two types. One is earned through usage of the app, another is premium either purchased in real life, earned through referrals, or earned upon completion of certain challenges. The premium currency could be used to purchase exclusive items in the marketplace, such as unique themes, profile customization options, or even physical merchandise. This would provide an additional incentive for users to engage with the app and share it with their friends, while also offering a way to support the development of the app through purchases. It's important to ensure that the premium currency offers valuable and desirable rewards without creating a pay-to-win environment, so that all users can enjoy the benefits of the app regardless of their spending habits.
 - Improve the splash screen. The dashboard below should not be there. The Welcome Screen should be it's own tab and window component. Improve the look of the Welcome screen with better animations and effects if possible.
 - Fix the errors where the browser shows a security or suspicious warning when trying to fetch information from the web.
-- 
+
+---
+
+- Uploaded photos/media are not rendering in the Media Library.
+-  
 
 
 # Bugs

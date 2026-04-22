@@ -1964,6 +1964,102 @@ ipcMain.handle('shell:getLaunchFile', () => {
   return f
 })
 
+// ─── Component Marketplace IPC ──────────────────────────────────────────────
+// Local .mbcomp packs are plain JSON files stored under the app's userData
+// folder. A pack is {name, version, author, description, preview, category,
+// component:{template,config}, rating?}. Installed packs are tracked in
+// electron-store at `marketplace.installed` (array of pack objects) so the
+// renderer can enumerate them without touching the filesystem on every call.
+const MARKET_DIR = path.join(userData, 'marketplace')
+function ensureMarketDir() {
+  try { if (!fs.existsSync(MARKET_DIR)) fs.mkdirSync(MARKET_DIR, { recursive: true }) } catch {}
+}
+function readPackFile(fp) {
+  const raw = fs.readFileSync(fp, 'utf-8')
+  const pack = JSON.parse(raw)
+  if (!pack || typeof pack !== 'object' || !pack.name || !pack.version) {
+    throw new Error('Invalid .mbcomp pack: missing name/version')
+  }
+  return pack
+}
+ipcMain.handle('marketplace:list', () => pbGet('marketplace', { installed: [] }).installed || [])
+ipcMain.handle('marketplace:install', (_, pack) => {
+  ensureMarketDir()
+  if (!pack?.name || !pack?.version) return { success: false, error: 'Invalid pack' }
+  const safeName = String(pack.name).replace(/[^a-z0-9-_]/gi, '_')
+  const fp = path.join(MARKET_DIR, `${safeName}-${pack.version}.mbcomp`)
+  try { fs.writeFileSync(fp, JSON.stringify(pack, null, 2), 'utf-8') }
+  catch (e) { return { success: false, error: String(e?.message || e) } }
+  const state = pbGet('marketplace', { installed: [] })
+  state.installed = (state.installed || []).filter(p => p.name !== pack.name)
+  state.installed.push({ ...pack, installedAt: new Date().toISOString(), filePath: fp })
+  pbSet('marketplace', state)
+  return { success: true, pack }
+})
+ipcMain.handle('marketplace:uninstall', (_, name) => {
+  const state = pbGet('marketplace', { installed: [] })
+  const removed = (state.installed || []).find(p => p.name === name)
+  state.installed = (state.installed || []).filter(p => p.name !== name)
+  pbSet('marketplace', state)
+  if (removed?.filePath) { try { fs.unlinkSync(removed.filePath) } catch {} }
+  return { success: true }
+})
+ipcMain.handle('marketplace:importFromFile', async () => {
+  const res = await dialog.showOpenDialog({
+    title: 'Import .mbcomp pack',
+    filters: [{ name: 'Multitool Component', extensions: ['mbcomp', 'json'] }],
+    properties: ['openFile'],
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { success: false, canceled: true }
+  try {
+    const pack = readPackFile(res.filePaths[0])
+    return { success: true, pack }
+  } catch (e) { return { success: false, error: String(e?.message || e) } }
+})
+ipcMain.handle('marketplace:importFromGithub', async (_, url) => {
+  if (typeof url !== 'string' || !url.trim()) return { success: false, error: 'URL required' }
+  // Accept raw.githubusercontent.com URLs, or convert github.com/<o>/<r>/blob/<b>/<p>
+  // to the equivalent raw URL so users can paste either form.
+  let fetchUrl = url.trim()
+  const blobMatch = fetchUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i)
+  if (blobMatch) {
+    fetchUrl = `https://raw.githubusercontent.com/${blobMatch[1]}/${blobMatch[2]}/${blobMatch[3]}/${blobMatch[4]}`
+  }
+  if (!/^https:\/\/(raw\.githubusercontent\.com|github\.com)\//i.test(fetchUrl)) {
+    return { success: false, error: 'Only GitHub URLs are allowed' }
+  }
+  try {
+    const { net } = require('electron')
+    const text = await new Promise((resolve, reject) => {
+      const req = net.request(fetchUrl)
+      let body = ''
+      req.on('response', (resp) => {
+        if (resp.statusCode >= 400) { reject(new Error(`HTTP ${resp.statusCode}`)); return }
+        resp.on('data', chunk => { body += chunk.toString('utf-8') })
+        resp.on('end', () => resolve(body))
+      })
+      req.on('error', reject)
+      req.end()
+    })
+    const pack = JSON.parse(text)
+    if (!pack?.name || !pack?.version) throw new Error('Invalid pack: missing name/version')
+    return { success: true, pack }
+  } catch (e) { return { success: false, error: String(e?.message || e) } }
+})
+ipcMain.handle('marketplace:export', async (_, pack) => {
+  if (!pack?.name) return { success: false, error: 'Pack required' }
+  const res = await dialog.showSaveDialog({
+    title: 'Export .mbcomp pack',
+    defaultPath: `${pack.name}-${pack.version || '1.0.0'}.mbcomp`,
+    filters: [{ name: 'Multitool Component', extensions: ['mbcomp'] }],
+  })
+  if (res.canceled || !res.filePath) return { success: false, canceled: true }
+  try {
+    fs.writeFileSync(res.filePath, JSON.stringify(pack, null, 2), 'utf-8')
+    return { success: true, filePath: res.filePath }
+  } catch (e) { return { success: false, error: String(e?.message || e) } }
+})
+
 app.whenReady().then(() => {
   // Skip splash in test mode to keep Playwright's firstWindow() deterministic.
   if (!process.env.MACROBOT_TEST) createSplash()

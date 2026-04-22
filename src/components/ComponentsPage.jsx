@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Zap, Keyboard, Type, MousePointer2,
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Rocket, BookOpen, AppWindow, CalendarClock, Volume2, Pipette,
   BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  LayoutGrid, Store, Plus, Package, Sparkles, ExternalLink
+  LayoutGrid, Store, Plus, Package, Sparkles, ExternalLink,
+  Download, Upload, Github, Trash2, Star
 } from 'lucide-react'
+import { useToast } from './Toast'
 
 // Mirror of the NAV registry in App.jsx — used to enumerate every component
 // in the app as a browsable catalog. Keep in sync when adding new tools.
@@ -138,18 +140,7 @@ export default function ComponentsPage({ onNavigate }) {
         </>
       )}
 
-      {tab === 'marketplace' && (
-        <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-          <Store size={36} style={{ color: 'var(--accent)', marginBottom: 12 }} />
-          <div className="card-title" style={{ justifyContent: 'center' }}>Component Marketplace</div>
-          <div className="text-muted mt-8" style={{ maxWidth: 440, margin: '8px auto 0' }}>
-            Discover and install community-built plugins, themes, and workflow extensions.
-          </div>
-          <div className="mt-16" style={{ display: 'inline-flex', gap: 8, alignItems: 'center', padding: '6px 12px', background: 'var(--yellow-dim)', color: 'var(--yellow)', borderRadius: 999, fontSize: 12 }}>
-            <Sparkles size={12} /> Coming soon
-          </div>
-        </div>
-      )}
+      {tab === 'marketplace' && <MarketplaceTab />}
 
       {tab === 'create' && (
         <div className="card" style={{ padding: 32, textAlign: 'center' }}>
@@ -163,6 +154,176 @@ export default function ComponentsPage({ onNavigate }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Marketplace Tab ─────────────────────────────────────────────────────────
+// Handles browsing installed .mbcomp packs plus importing from a local file
+// picker or a GitHub raw URL. All IPC calls are best-effort: failures surface
+// as toast errors rather than throwing, so the UI stays responsive.
+const SAMPLE_PACKS = [
+  {
+    name: 'Weather Widget', version: '1.0.0', author: 'Multitool Team',
+    description: 'At-a-glance local weather card with 3-day forecast.',
+    category: 'Personal', preview: '☀️',
+    component: { template: 'card', config: { source: 'weather' } },
+    rating: 4.6,
+  },
+  {
+    name: 'Quick Notes', version: '1.2.0', author: 'Community',
+    description: 'Floating sticky-note strip pinned to the dashboard.',
+    category: 'Tools', preview: '📝',
+    component: { template: 'list', config: { items: [] } },
+    rating: 4.2,
+  },
+  {
+    name: 'Crypto Ticker', version: '0.9.0', author: 'Community',
+    description: 'Live price tracker for a handful of cryptocurrencies.',
+    category: 'Connect', preview: '📈',
+    component: { template: 'stats', config: { symbols: ['BTC','ETH','SOL'] } },
+    rating: 3.9,
+  },
+]
+
+function MarketplaceTab() {
+  const toast = useToast()
+  const [installed, setInstalled] = useState([])
+  const [githubUrl, setGithubUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const hasApi = !!window.api?.marketplace
+
+  const refresh = async () => {
+    if (!hasApi) return
+    try { setInstalled(await window.api.marketplace.list() || []) } catch {}
+  }
+  useEffect(() => { refresh() }, [])
+
+  const install = async (pack) => {
+    if (!hasApi) return
+    setBusy(true)
+    const r = await window.api.marketplace.install(pack)
+    setBusy(false)
+    if (r?.success) { toast.show({ type: 'success', title: 'Installed', message: pack.name }); refresh() }
+    else toast.show({ type: 'error', title: 'Install failed', message: r?.error || 'Unknown error' })
+  }
+  const uninstall = async (name) => {
+    if (!hasApi) return
+    await window.api.marketplace.uninstall(name)
+    toast.show({ type: 'info', title: 'Uninstalled', message: name })
+    refresh()
+  }
+  const importFile = async () => {
+    if (!hasApi) return
+    const r = await window.api.marketplace.importFromFile()
+    if (r?.canceled) return
+    if (r?.success) install(r.pack)
+    else toast.show({ type: 'error', title: 'Import failed', message: r?.error || 'Unknown error' })
+  }
+  const importGithub = async () => {
+    if (!hasApi || !githubUrl.trim()) return
+    setBusy(true)
+    const r = await window.api.marketplace.importFromGithub(githubUrl.trim())
+    setBusy(false)
+    if (r?.success) { install(r.pack); setGithubUrl('') }
+    else toast.show({ type: 'error', title: 'GitHub import failed', message: r?.error || 'Unknown error' })
+  }
+  const exportPack = async (pack) => {
+    if (!hasApi) return
+    const r = await window.api.marketplace.export(pack)
+    if (r?.success) toast.show({ type: 'success', title: 'Exported', message: r.filePath })
+    else if (!r?.canceled) toast.show({ type: 'error', title: 'Export failed', message: r?.error || 'Unknown error' })
+  }
+
+  const installedNames = new Set(installed.map(p => p.name))
+
+  return (
+    <div>
+      <div className="card mb-16" style={{ padding: 14 }}>
+        <div className="card-title mb-8"><Store size={14} className="card-title-icon" /> Import Packs</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-ghost" onClick={importFile} disabled={!hasApi || busy}>
+            <Upload size={13} /> Import .mbcomp file
+          </button>
+          <div style={{ flex: 1, minWidth: 260, display: 'flex', gap: 6 }}>
+            <input
+              className="input"
+              placeholder="https://raw.githubusercontent.com/..."
+              value={githubUrl}
+              onChange={e => setGithubUrl(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={importGithub}
+              disabled={!hasApi || busy || !githubUrl.trim()}
+            >
+              <Github size={13} /> Install from URL
+            </button>
+          </div>
+        </div>
+        <div className="text-xs text-muted" style={{ marginTop: 8 }}>
+          Paste a raw GitHub URL or a github.com/.../blob/... URL pointing to a <code>.mbcomp</code> or <code>.json</code> file.
+        </div>
+      </div>
+
+      <div className="nav-section-label" style={{ padding: '8px 0' }}>Installed ({installed.length})</div>
+      {installed.length === 0
+        ? <div className="card mb-16"><div className="text-muted">No packs installed yet. Try one of the samples below or import from a URL.</div></div>
+        : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 16 }}>
+            {installed.map(p => (
+              <div key={p.name} className="card" style={{ padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <div style={{ fontSize: 22 }}>{p.preview || '📦'}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                    <div className="text-xs text-muted">v{p.version} · {p.author || 'unknown'}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45, marginBottom: 10 }}>{p.description}</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => exportPack(p)}>
+                    <Download size={12} /> Export
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => uninstall(p.name)} style={{ color: 'var(--red)' }}>
+                    <Trash2 size={12} /> Uninstall
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+
+      <div className="nav-section-label" style={{ padding: '8px 0' }}>Sample Packs</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+        {SAMPLE_PACKS.map(p => {
+          const isInstalled = installedNames.has(p.name)
+          return (
+            <div key={p.name} className="card" style={{ padding: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ fontSize: 22 }}>{p.preview}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.name}</div>
+                  <div className="text-xs text-muted">v{p.version} · {p.author}</div>
+                </div>
+                <div className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--yellow)' }}>
+                  <Star size={11} fill="currentColor" /> {p.rating}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.45, marginBottom: 10 }}>{p.description}</div>
+              <button
+                className={`btn btn-sm ${isInstalled ? 'btn-ghost' : 'btn-primary'}`}
+                onClick={() => isInstalled ? uninstall(p.name) : install(p)}
+                disabled={!hasApi || busy}
+              >
+                {isInstalled ? <><Trash2 size={12} /> Uninstall</> : <><Download size={12} /> Install</>}
+              </button>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
