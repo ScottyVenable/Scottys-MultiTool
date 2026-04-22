@@ -25,6 +25,25 @@ const catColor = (name) => (CATEGORIES.find(c => c.id === name)?.color) || '#647
 function xpForLevel(level) { return Math.pow(level, 2) * 50 }
 function levelForXp(xp) { return Math.floor(Math.sqrt(xp / 50)) }
 
+// Given a chore `day` field ('daily' or mon..sun), compute the next
+// calendar date that matches at 9am local time. Returns null if unknown.
+function nextDueDate(day) {
+  const now = new Date()
+  const target = new Date(now)
+  target.setHours(9, 0, 0, 0)
+  if (day === 'daily') {
+    if (target <= now) target.setDate(target.getDate() + 1)
+    return target
+  }
+  const map = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
+  if (!(day in map)) return null
+  const want = map[day]
+  let delta = (want - now.getDay() + 7) % 7
+  if (delta === 0 && target <= now) delta = 7
+  target.setDate(target.getDate() + delta)
+  return target
+}
+
 function ChoreModal({ chore, onSave, onClose, memberOptions }) {
   const [title, setTitle] = useState(chore?.title || '')
   const [description, setDescription] = useState(chore?.description || '')
@@ -166,7 +185,30 @@ export default function ChorePlanner() {
   }
 
   const saveChore = async (chore) => {
-    await safeCall(() => window.api.chores.save(chore), { where: 'chores.save', toast })
+    const saved = await safeCall(() => window.api.chores.save(chore), { where: 'chores.save', toast })
+    // Auto-mint a reminder for the next occurrence of this chore, linked by
+    // `source: 'chore:<id>'` so duplicates from repeated edits are idempotent.
+    try {
+      const when = nextDueDate(chore.day)
+      if (when && window.api.reminders?.save) {
+        const idForThis = saved?.id || chore.id
+        const rid = `chore_${idForThis || Date.now().toString(36)}`
+        // Remove any prior reminder for this chore first (best-effort).
+        try {
+          const existing = await window.api.reminders.list()
+          for (const r of (existing || [])) {
+            if (r.source === `chore:${idForThis}`) await window.api.reminders.delete(r.id)
+          }
+        } catch {}
+        await window.api.reminders.save({
+          id: rid,
+          title: chore.title,
+          due: when.toISOString(),
+          source: `chore:${idForThis}`,
+          dismissed: false,
+        })
+      }
+    } catch (e) { /* reminder mint is best-effort */ }
     setEditing(null)
     refresh()
     toast.show({ type: 'success', title: 'Chore saved' })
@@ -255,7 +297,17 @@ export default function ChorePlanner() {
   const leaderboard = (() => {
     const totals = {}
     for (const h of profile.history || []) totals[h.owner || 'me'] = (totals[h.owner || 'me'] || 0) + (h.points || 0)
-    return Object.entries(totals).sort((a, b) => b[1] - a[1])
+    let entries = Object.entries(totals)
+    // If a household is active, scope the board to its members and also
+    // surface members who have 0 points yet so the ranking feels complete.
+    if (activeHousehold && (activeHousehold.members || []).length) {
+      const names = new Set(activeHousehold.members.map(m => m.name))
+      entries = entries.filter(([n]) => names.has(n))
+      for (const m of activeHousehold.members) {
+        if (!(m.name in totals)) entries.push([m.name, 0])
+      }
+    }
+    return entries.sort((a, b) => b[1] - a[1])
   })()
 
   const unlocked = new Set(profile.achievements || [])
@@ -411,13 +463,14 @@ export default function ChorePlanner() {
 
       {tab === 'board' && (
         <div className="card">
-          <div className="card-title mb-12"><Trophy size={14} className="card-title-icon" /> Leaderboard</div>
+          <div className="card-title mb-12"><Trophy size={14} className="card-title-icon" /> Leaderboard {activeHousehold && <span className="text-xs text-muted" style={{ fontWeight: 400 }}>· {activeHousehold.name}</span>}</div>
           {leaderboard.length === 0
             ? <div className="text-sm text-muted">No completions yet.</div>
             : leaderboard.map(([name, pts], i) => (
               <div key={name} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                 <div className="flex items-center gap-8">
                   <div style={{ width: 28, textAlign: 'center', fontWeight: 700, color: i === 0 ? 'var(--yellow)' : 'var(--text-2)' }}>{i + 1}</div>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: memberColor(name) }} />
                   <div style={{ fontWeight: 500 }}>{name}</div>
                 </div>
                 <div style={{ fontFamily: 'var(--mono)' }}>{pts} XP</div>
