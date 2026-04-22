@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" width="560" height="128" role="img" aria-label="Scotty Multitool">
+  <!--
+    Scotty Multitool — horizontal wordmark.
+    Glyph (left) + wordmark (right) separated by a subtle rule.
+    Uses currentColor throughout so it inherits the surrounding theme.
+  -->
+  <defs>
+    <linearGradient id="mt-wm-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="currentColor" stop-opacity="1"/>
+      <stop offset="1" stop-color="currentColor" stop-opacity="0.72"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Glyph (scaled from the 256x256 icon) -->
+  <g transform="translate(8,8) scale(0.44)">
+    <rect x="18" y="18" width="220" height="220" rx="52" ry="52"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-opacity="0.15"/>
+    <path
+      d="M78 62 a34 34 0 1 0 48 48 L176 160 l18 -18 L144 92
+         a34 34 0 0 0 -48 -48 a34 34 0 0 0 -28 12 l22 22
+         a14 14 0 1 1 -20 20 l-22 -22 a34 34 0 0 0 0 16 z"
+      fill="url(#mt-wm-grad)" stroke="currentColor"
+      stroke-width="2" stroke-linejoin="round"/>
+    <path
+      d="M142 168 l24 24 l-24 24 M166 168 l24 24 l-24 24"
+      fill="none" stroke="currentColor" stroke-width="12"
+      stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Divider rule -->
+  <line x1="128" y1="28" x2="128" y2="100"
+        stroke="currentColor" stroke-opacity="0.25" stroke-width="1.5"/>
+
+  <!-- Wordmark -->
+  <g transform="translate(148,0)" fill="currentColor">
+    <text x="0" y="58" font-family="system-ui, -apple-system, Segoe UI, Inter, sans-serif"
+          font-size="36" font-weight="700" letter-spacing="-0.02em">Multitool</text>
+    <text x="2" y="88" font-family="system-ui, -apple-system, Segoe UI, Inter, sans-serif"
+          font-size="13" font-weight="500" letter-spacing="0.14em"
+          fill-opacity="0.6">LOCAL · AUTOMATE · FOCUS</text>
+  </g>
+</svg>

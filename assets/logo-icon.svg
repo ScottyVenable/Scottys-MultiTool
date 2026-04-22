@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Scotty Multitool">
+  <!--
+    Scotty Multitool — glyph-only mark.
+    Design: a minimalist wrench profile fused with a forward chevron,
+    forming a single continuous stroke. Evokes versatility (wrench),
+    forward motion / command (chevron), and the idea of a "tool that
+    moves you forward". Works monochrome on any background.
+
+    The stroke uses currentColor so host code can theme it.
+  -->
+  <defs>
+    <linearGradient id="mt-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="currentColor" stop-opacity="1"/>
+      <stop offset="1" stop-color="currentColor" stop-opacity="0.7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded-square plate (optional background; transparent by default) -->
+  <rect x="18" y="18" width="220" height="220" rx="52" ry="52"
+        fill="none" stroke="currentColor" stroke-width="2" stroke-opacity="0.15"/>
+
+  <!-- Wrench jaw (open end) -->
+  <path
+    d="M78 62
+       a34 34 0 1 0 48 48
+       L176 160
+       l18 -18
+       L144 92
+       a34 34 0 0 0 -48 -48
+       a34 34 0 0 0 -28 12
+       l22 22
+       a14 14 0 1 1 -20 20
+       l-22 -22
+       a34 34 0 0 0 0 16
+       z"
+    fill="url(#mt-grad)"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linejoin="round"/>
+
+  <!-- Forward chevron, offset bottom-right -->
+  <path
+    d="M142 168
+       l24 24
+       l-24 24
+       M166 168
+       l24 24
+       l-24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>

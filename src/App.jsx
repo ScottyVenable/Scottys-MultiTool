@@ -179,8 +179,11 @@ function MainApp() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <Wrench size={14} strokeWidth={2.5} />
+          <div className="sidebar-logo-icon" aria-hidden="true">
+            <svg viewBox="0 0 256 256" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M78 62 a34 34 0 1 0 48 48 L176 160 l18 -18 L144 92 a34 34 0 0 0 -48 -48 a34 34 0 0 0 -28 12 l22 22 a14 14 0 1 1 -20 20 l-22 -22 a34 34 0 0 0 0 16 z" fill="currentColor" stroke="none"/>
+              <path d="M142 168 l24 24 l-24 24 M166 168 l24 24 l-24 24"/>
+            </svg>
           </div>
           <span className="sidebar-logo-text">Multitool</span>
         </div>
