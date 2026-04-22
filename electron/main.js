@@ -1532,6 +1532,20 @@ ipcMain.handle('fs:readfile', async (_, p, maxBytes = 51200) => {
   fs.closeSync(fd)
   return buf.slice(0, bytesRead).toString('utf8')
 })
+ipcMain.handle('fs:writefile', async (_, p, content) => {
+  // Write UTF-8 content to an arbitrary path. Caller is expected to supply a
+  // fully qualified, user-chosen path; safePath blocks obvious traversal.
+  const safe = safePath(p)
+  await fs.promises.mkdir(path.dirname(safe), { recursive: true })
+  await fs.promises.writeFile(safe, String(content ?? ''), 'utf8')
+  return true
+})
+// Default workspace root for the IDE — stored under %APPDATA%/scotty-multitool/projects.
+ipcMain.handle('ide:projectsDir', async () => {
+  const dir = path.join(app.getPath('userData'), 'projects')
+  await fs.promises.mkdir(dir, { recursive: true })
+  return dir
+})
 ipcMain.handle('fs:copy', async (_, src, dest) => { await fs.promises.copyFile(safePath(src), safePath(dest)); return true })
 ipcMain.handle('fs:move', async (_, src, dest) => { await fs.promises.rename(safePath(src), safePath(dest)); return true })
 ipcMain.handle('fs:delete', async (_, p) => {

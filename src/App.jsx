@@ -4,7 +4,7 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles
+  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2
 } from 'lucide-react'
 import WelcomeScreen from './components/WelcomeScreen'
 import Dashboard from './components/Dashboard'
@@ -33,6 +33,7 @@ import Browser from './components/Browser'
 import MediaLibrary from './components/MediaLibrary'
 import GlobalSearch from './components/GlobalSearch'
 import ComponentsPage from './components/ComponentsPage'
+import IDE from './components/IDE'
 import MediaPlayerBar from './components/MediaPlayerBar'
 import { ToastProvider } from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -59,6 +60,7 @@ const NAV = [
   { id: 'color-picker',  label: 'Color Picker',    icon: Pipette,         section: 'tools' },
   { id: 'system',        label: 'System Monitor',  icon: Monitor,         section: 'tools' },
   { id: 'file-manager',  label: 'File Manager',    icon: FolderOpen,      section: 'tools' },
+  { id: 'ide',           label: 'IDE',             icon: Code2,           section: 'tools' },
   { id: 'journal',       label: 'Journal',         icon: BookHeart,       section: 'personal' },
   { id: 'reminders',     label: 'Reminders',       icon: Bell,            section: 'personal' },
   { id: 'chores',        label: 'Chore Planner',   icon: Trophy,          section: 'personal' },
@@ -98,6 +100,7 @@ const PAGE_MAP = {
   'color-picker': ColorPicker,
   system: SystemMonitor,
   'file-manager': FileManager,
+  ide: IDE,
   journal: Journal,
   reminders: Reminders,
   chores: ChorePlanner,

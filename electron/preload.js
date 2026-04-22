@@ -121,6 +121,7 @@ contextBridge.exposeInMainWorld('api', {
     readdir: (p) => ipcRenderer.invoke('fs:readdir', p),
     stat: (p) => ipcRenderer.invoke('fs:stat', p),
     readfile: (p, maxBytes) => ipcRenderer.invoke('fs:readfile', p, maxBytes),
+    writefile: (p, content) => ipcRenderer.invoke('fs:writefile', p, content),
     copy: (src, dest) => ipcRenderer.invoke('fs:copy', src, dest),
     move: (src, dest) => ipcRenderer.invoke('fs:move', src, dest),
     delete: (p) => ipcRenderer.invoke('fs:delete', p),
@@ -129,6 +130,9 @@ contextBridge.exposeInMainWorld('api', {
     rename: (oldP, newP) => ipcRenderer.invoke('fs:rename', oldP, newP),
     open: (p) => ipcRenderer.invoke('fs:open', p),
     search: (dir, q) => ipcRenderer.invoke('fs:search', dir, q),
+  },
+  ide: {
+    projectsDir: () => ipcRenderer.invoke('ide:projectsDir'),
   },
   shell: {
     spawn: () => ipcRenderer.invoke('shell:spawn'),
