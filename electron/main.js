@@ -1437,19 +1437,19 @@ ipcMain.handle('settings:import', async () => {
 
 // ─── Chores ───────────────────────────────────────────────────────────────────
 const ACHIEVEMENT_DEFS = [
-  { id: 'first_complete', name: 'First Step',        desc: 'Complete your first chore.',        rule: (p) => (p.history||[]).length >= 1 },
-  { id: 'streak_3',       name: '3-Day Streak',      desc: 'Complete any chore 3 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 3 },
-  { id: 'streak_7',       name: 'Week Warrior',      desc: 'Complete any chore 7 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 7 },
-  { id: 'streak_30',      name: 'Iron Discipline',   desc: 'Complete any chore 30 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 30 },
-  { id: 'level_5',        name: 'Level 5',           desc: 'Reach level 5.',                     rule: (p) => (p.level||0) >= 5 },
-  { id: 'level_10',       name: 'Level 10',          desc: 'Reach level 10.',                    rule: (p) => (p.level||0) >= 10 },
-  { id: 'variety_5',      name: 'Variety',           desc: 'Complete chores in 5 categories.',   rule: (_, ctx) => {
+  { id: 'first_complete', name: 'First Step',        description: 'Complete your first chore.',        rule: (p) => (p.history||[]).length >= 1 },
+  { id: 'streak_3',       name: '3-Day Streak',      description: 'Complete any chore 3 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 3 },
+  { id: 'streak_7',       name: 'Week Warrior',      description: 'Complete any chore 7 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 7 },
+  { id: 'streak_30',      name: 'Iron Discipline',   description: 'Complete any chore 30 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 30 },
+  { id: 'level_5',        name: 'Level 5',           description: 'Reach level 5.',                     rule: (p) => (p.level||0) >= 5 },
+  { id: 'level_10',       name: 'Level 10',          description: 'Reach level 10.',                    rule: (p) => (p.level||0) >= 10 },
+  { id: 'variety_5',      name: 'Variety',           description: 'Complete chores in 5 categories.',   rule: (_, ctx) => {
       const cats = new Set(); for (const h of ctx?.allHistoryWithCats || []) if (h.category) cats.add(h.category)
       return cats.size >= 5 } },
-  { id: 'early_bird',     name: 'Early Bird',        desc: 'Complete a chore before 9am.',       rule: (_, ctx) => { const h = new Date().getHours(); return h < 9 } },
-  { id: 'night_owl',      name: 'Night Owl',         desc: 'Complete a chore after 10pm.',       rule: (_, ctx) => { const h = new Date().getHours(); return h >= 22 } },
-  { id: 'ten_done',       name: 'Ten Done',          desc: 'Complete 10 chores total.',          rule: (p) => (p.history||[]).length >= 10 },
-  { id: 'fifty_done',     name: 'Fifty Done',        desc: 'Complete 50 chores total.',          rule: (p) => (p.history||[]).length >= 50 },
+  { id: 'early_bird',     name: 'Early Bird',        description: 'Complete a chore before 9am.',       rule: (_, ctx) => { const h = new Date().getHours(); return h < 9 } },
+  { id: 'night_owl',      name: 'Night Owl',         description: 'Complete a chore after 10pm.',       rule: (_, ctx) => { const h = new Date().getHours(); return h >= 22 } },
+  { id: 'ten_done',       name: 'Ten Done',          description: 'Complete 10 chores total.',          rule: (p) => (p.history||[]).length >= 10 },
+  { id: 'fifty_done',     name: 'Fifty Done',        description: 'Complete 50 chores total.',          rule: (p) => (p.history||[]).length >= 50 },
 ]
 
 function evaluateAchievements(profile, ctx) {

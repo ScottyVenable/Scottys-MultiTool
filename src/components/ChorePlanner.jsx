@@ -340,15 +340,17 @@ export default function ChorePlanner() {
           <div className="text-xs text-muted mb-12">{unlocked.size}/{achievementDefs.length || '?'} unlocked</div>
           <div className="grid-2 gap-8">
             {(achievementDefs.length ? achievementDefs : [
-              { id: 'first_complete', name: 'First Steps', description: 'Complete your first chore.' },
-              { id: 'streak_3', name: 'Warm-up', description: '3-day streak.' },
-              { id: 'streak_7', name: 'On Fire', description: '7-day streak.' },
-              { id: 'streak_30', name: 'Unstoppable', description: '30-day streak.' },
-              { id: 'level_5', name: 'Apprentice', description: 'Reach level 5.' },
-              { id: 'level_10', name: 'Journeyman', description: 'Reach level 10.' },
-              { id: 'variety_5_categories', name: 'Well-rounded', description: 'Complete chores in 5 different categories.' },
-              { id: 'early_bird', name: 'Early Bird', description: 'Complete a chore before 8 AM.' },
-              { id: 'night_owl', name: 'Night Owl', description: 'Complete a chore after 10 PM.' },
+              { id: 'first_complete', name: 'First Step', description: 'Complete your first chore.' },
+              { id: 'streak_3', name: '3-Day Streak', description: 'Complete any chore 3 days in a row.' },
+              { id: 'streak_7', name: 'Week Warrior', description: 'Complete any chore 7 days in a row.' },
+              { id: 'streak_30', name: 'Iron Discipline', description: 'Complete any chore 30 days in a row.' },
+              { id: 'level_5', name: 'Level 5', description: 'Reach level 5.' },
+              { id: 'level_10', name: 'Level 10', description: 'Reach level 10.' },
+              { id: 'variety_5', name: 'Variety', description: 'Complete chores in 5 different categories.' },
+              { id: 'early_bird', name: 'Early Bird', description: 'Complete a chore before 9am.' },
+              { id: 'night_owl', name: 'Night Owl', description: 'Complete a chore after 10pm.' },
+              { id: 'ten_done', name: 'Ten Done', description: 'Complete 10 chores total.' },
+              { id: 'fifty_done', name: 'Fifty Done', description: 'Complete 50 chores total.' },
             ]).map(a => {
               const got = unlocked.has(a.id)
               return (
