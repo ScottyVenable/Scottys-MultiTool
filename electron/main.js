@@ -2229,6 +2229,31 @@ app.whenReady().then(() => {
   if (!process.env.MACROBOT_TEST) createSplash()
   createWindow()
   try { require('./chrome-cdp').registerIpc(ipcMain, app) } catch (e) { console.error('cdp register failed', e) }
+  // Auto-start the companion server so the status bar pill lights up on launch.
+  setTimeout(async () => {
+    try {
+      const script = path.join(__dirname, '..', 'server', 'index.js')
+      if (fs.existsSync(script) && !serverProc) {
+        serverProc = spawn(process.execPath, [script], {
+          cwd: path.join(__dirname, '..'),
+          env: { ...process.env, SCOTTY_SERVER_PORT: String(SERVER_PORT), ELECTRON_RUN_AS_NODE: '1' },
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        serverState = { ...serverState, state: 'connecting', error: null }
+        broadcastServerState()
+        const onD = (buf) => { try { process.stdout.write('[server] ' + buf.toString()) } catch {} }
+        serverProc.stdout?.on('data', onD)
+        serverProc.stderr?.on('data', onD)
+        serverProc.on('exit', (code) => {
+          serverProc = null
+          serverState = { ...serverState, state: 'idle', error: code ? 'exit ' + code : null }
+          broadcastServerState()
+        })
+        setTimeout(refreshServerState, 800)
+      }
+    } catch (e) { console.error('auto-start server failed', e) }
+  }, 2000)
   // Expose imported media to the renderer via a custom protocol. Using file://
   // directly is blocked by Electron's default webSecurity, which is why images
   // weren't rendering in the Media Library.
