@@ -1039,3 +1039,50 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-color: var(--accent);
   background: var(--bg-2);
 }
+
+/* ── Welcome Hero (Dashboard) ─────────────────────────────────────────────── */
+.welcome-hero {
+  padding: 28px 4px 20px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.welcome-hero-greeting {
+  font-size: 26px; font-weight: 600; color: var(--text-0);
+  letter-spacing: -0.02em;
+}
+.welcome-hero-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+.welcome-hero-punct { color: var(--text-2); }
+.welcome-hero-sub {
+  font-size: 17px; color: var(--text-2); font-weight: 400;
+}
+.welcome-hero-verb {
+  display: inline-block;
+  font-weight: 700;
+  min-width: 6ch;
+  transition: opacity .3s ease, transform .3s ease;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 1px;
+}
+.welcome-hero-verb.fading {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.welcome-hero-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+  display: flex; align-items: center; gap: 10px;
+}
+.welcome-hero-tip-label {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}

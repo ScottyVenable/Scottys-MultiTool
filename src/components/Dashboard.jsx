@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Zap, Keyboard, Type, Clock, Activity, Play, ChevronRight, TrendingUp } from 'lucide-react'
+import WelcomeHero from './WelcomeHero'
 
 export default function Dashboard({ onNavigate }) {
   const [macros, setMacros] = useState([])
@@ -30,6 +31,7 @@ export default function Dashboard({ onNavigate }) {
 
   return (
     <div className="animate-in">
+      <WelcomeHero />
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-title">Dashboard</div>
