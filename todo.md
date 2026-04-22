@@ -1,3 +1,19 @@
+## ✅ Completed in this session
+
+- Welcome tab as its own component — `0246c7fe` / `a998c0cc`
+- Logo + wordmark + concepts doc — `781a8827`
+- Detachable CLI window — `3a469d07`
+- Browser splash overlay — `72bc0f35`
+- Chore households, members, month calendar — `c0a92d92`
+- Chore auto-reminders + scoped leaderboard — `d51de3ef`
+- Windows Open-With registration — `0e66f3f7`
+- Component marketplace (`.mbcomp` + GitHub import) — `f46e346b`
+- Visual create wizard — `d7a43b0b`
+- Monaco IDE with file tree, terminal, AI panel — `f60f968e`
+- Chrome DevTools Protocol target — `867e0b2d`
+
+---
+
 - Make sure to commit after every major update you do if tested and then push on main origin.
 - Create a splash screen for the application itself upon signing in, transforming the Dashboard into a Welcome Screen with some basic information, news, tips, with a "Welcome {Users Name}!" or even a dynamic subtitle that changes like "Ready to {action here}" like "Ready to browse?" "ready to plan?", "ready to focus?", etc that encompasses all component types. The "Ready to" should stay stagnant, but the action word should fade/animate in and out with different words and in different colors.
 - Expand the Computer Use for the AI Agent and make there be an option to connect a window like Chrome and connect to the debug tools automatically and uses that information in the code to control the browser similar to how Claude performs computer use in Google Chrome. Make sure to add error handling, logging, etc. for it. It can pick from active Google Chrome windows. Once that is integrated, see if it is possible to connect it to other apps or to its own command line interface.
@@ -21,7 +37,7 @@
 ---
 
 - Uploaded photos/media are not rendering in the Media Library.
-- 
+- implement abili
 
 
 # Bugs

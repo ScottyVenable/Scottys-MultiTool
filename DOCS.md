@@ -576,3 +576,41 @@ welcome. Keep UI additions consistent with the existing design tokens
 *Last updated with the "7 tasks" release: background-window macro targeting,
 keyboard-first PIN entry, Forgot PIN flow, live volume slider, SMTC media
 player bar, Components tab, and this documentation.*
+
+---
+
+## New in this release
+
+The following features landed as part of the 11-feature milestone. Commit SHAs are noted for reference.
+
+### Welcome tab (`0246c7fe`, promoted `a998c0cc`)
+Its own top-level tab with animated hero, dynamic verb cycle ("Ready to ____"), and a rotating tip. The Dashboard remains unchanged behind it. Selected automatically on first launch when no other route is active.
+
+### Brand identity (`781a8827`)
+New wrench+chevron glyph at `assets/logo.svg`, a compact icon-only variant at `assets/logo-icon.svg`, and `assets/LOGO-CONCEPTS.md` with prompts for generating refined logo variants.
+
+### Detachable CLI (`3a469d07`)
+The Agent CLI tab can now pop out into its own small window via the external-link button. Uses a hash route (`#cli`) that renders a standalone shell mirroring the inline CLI. The main window stays in sync through the shared `shell:*` IPC.
+
+### Browser splash (`72bc0f35`)
+A first-use overlay with quick-site shortcuts and a tip of the day. Dismissal is remembered in `sessionStorage` so the splash does not get in the way between navigations.
+
+### Households, members, and calendar (`c0a92d92`, addendum `d51de3ef`)
+Chore Planner gained Households with colored members, a month calendar showing member-colored dots for due dates, auto-minted reminders when a chore falls due, and a leaderboard filtered to the active household.
+
+### Windows Open-With (`0e66f3f7`)
+Per-user (`HKCU`) registration under `ScottyMultitool.1`. Toggle from Settings → Windows Integration. When a registered file is opened, the launch path is delivered to the renderer via `window.api.shellIntegration.getLaunchFile()`.
+
+### Component marketplace (`f46e346b`)
+Browse, install, uninstall, and export components as `.mbcomp` packs stored under `%APPDATA%/scotty-multitool/marketplace/`. Supports importing from a GitHub URL as well as from a local file.
+
+### Visual create wizard (`d7a43b0b`)
+A five-step wizard (Template → Metadata → Fields → Preview → Done) inside the Components page. Built-in templates cover card, list, launcher, stats, and form layouts. Exports to the marketplace format.
+
+### IDE (`f60f968e`)
+Monaco-based editor with a file tree over `%APPDATA%/scotty-multitool/projects`, an inline PowerShell terminal (reuses `shell:*` IPC), and an AI side panel that scopes prompts to the currently-open file. Ctrl+S saves.
+
+### Chrome CDP target (`867e0b2d`)
+A new panel in the Computer Use tab launches Chrome/Edge with `--remote-debugging-port=9222` into a dedicated user profile, attaches via `chrome-remote-interface`, and exposes Go / Screenshot / Close controls. Logs to `%APPDATA%/scotty-multitool/logs/cdp-<date>.log`.
+
+---
