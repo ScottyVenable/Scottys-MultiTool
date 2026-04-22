@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { CalendarClock, Plus, Trash2, X, ToggleLeft, ToggleRight, AlertCircle, Clock, Calendar, Repeat } from 'lucide-react'
+import { CalendarClock, Plus, Trash2, X, ToggleLeft, ToggleRight, AlertCircle, AlertTriangle, Clock, Calendar, Repeat, ChevronDown, ChevronUp } from 'lucide-react'
+import WindowPicker from './WindowPicker'
 
 const TYPE_LABELS = { interval: 'Interval', daily: 'Daily', once: 'One-time' }
 const TYPE_ICONS  = { interval: Repeat, daily: Calendar, once: Clock }
@@ -13,6 +14,10 @@ function TaskModal({ task, macros, onSave, onClose }) {
   const [time, setTime]       = useState(task?.time || '09:00')
   const [datetime, setDatetime] = useState(task?.datetime || '')
   const [enabled, setEnabled] = useState(task?.enabled !== false)
+  const [overrideTarget, setOverrideTarget] = useState(!!task?.overrideTarget)
+  const [targetWindowRef, setTargetWindowRef] = useState(task?.targetWindowRef || null)
+  const [sendMode, setSendMode] = useState(task?.sendMode || 'foreground')
+  const [showOverride, setShowOverride] = useState(!!task?.overrideTarget)
 
   const save = () => {
     if (!name.trim() || !macroId) return
@@ -27,6 +32,9 @@ function TaskModal({ task, macros, onSave, onClose }) {
       time,
       datetime,
       enabled,
+      overrideTarget,
+      targetWindowRef: overrideTarget ? targetWindowRef : null,
+      sendMode: overrideTarget ? sendMode : null,
       createdAt: task?.createdAt || new Date().toISOString(),
       ran: task?.ran || false,
       lastRun: task?.lastRun || null,
@@ -103,6 +111,50 @@ function TaskModal({ task, macros, onSave, onClose }) {
               <input className="input" type="datetime-local" value={datetime} onChange={e => setDatetime(e.target.value)} />
             </div>
           )}
+
+          {/* Target window override */}
+          <div className="form-group">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm w-full"
+              style={{ justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', borderRadius: 0, padding: '10px 0' }}
+              onClick={() => setShowOverride(o => !o)}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>Override target window (optional)</span>
+              {showOverride ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            </button>
+            {showOverride && (
+              <div className="card mt-8 animate-in" style={{ padding: '12px 14px', background: 'var(--bg-3)' }}>
+                <div className="flex items-center justify-between mb-10">
+                  <span style={{ fontSize: 12, color: 'var(--text-1)' }}>Use task-specific target</span>
+                  <label className="toggle">
+                    <input type="checkbox" checked={overrideTarget} onChange={e => setOverrideTarget(e.target.checked)} />
+                    <span className="toggle-track" />
+                  </label>
+                </div>
+                {overrideTarget ? (
+                  <>
+                    <WindowPicker value={targetWindowRef} onChange={setTargetWindowRef} compact />
+                    <div className="form-group mt-10">
+                      <label className="form-label">Send Mode</label>
+                      <div className="send-mode-group">
+                        <button type="button" className={`btn btn-sm flex-1 ${sendMode === 'foreground' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSendMode('foreground')}>Foreground</button>
+                        <button type="button" className={`btn btn-sm flex-1 ${sendMode === 'background' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSendMode('background')}>Background</button>
+                      </div>
+                      {sendMode === 'background' && (
+                        <div className="bg-warning-banner mt-8">
+                          <AlertTriangle size={12} />
+                          <span>Games, Chromium apps, and elevated windows may ignore background input.</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-muted">Uses the macro's own target window and send mode.</div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between" style={{ padding: '10px 0' }}>
             <span style={{ fontSize: 13, color: 'var(--text-1)' }}>Enabled</span>

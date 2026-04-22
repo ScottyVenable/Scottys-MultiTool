@@ -4,7 +4,7 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp
+  User as UserIcon, LogOut, ChevronUp, LayoutGrid
 } from 'lucide-react'
 import Dashboard from './components/Dashboard'
 import MacroManager from './components/MacroManager'
@@ -31,6 +31,8 @@ import ChorePlanner from './components/ChorePlanner'
 import Browser from './components/Browser'
 import MediaLibrary from './components/MediaLibrary'
 import GlobalSearch from './components/GlobalSearch'
+import ComponentsPage from './components/ComponentsPage'
+import MediaPlayerBar from './components/MediaPlayerBar'
 import { ToastProvider } from './components/Toast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
@@ -62,6 +64,7 @@ const NAV = [
   { id: 'browser',       label: 'Browser',         icon: Globe,           section: 'connect' },
   { id: 'ai',            label: 'AI Workstation',  icon: Bot,             section: 'connect' },
   { id: 'mobile',        label: 'Mobile Remote',   icon: Smartphone,      section: 'connect' },
+  { id: 'components',    label: 'Components',      icon: LayoutGrid,      section: 'config' },
   { id: 'settings',      label: 'Settings',        icon: Settings,        section: 'config' },
   { id: 'help',          label: 'Help',            icon: HelpCircle,      section: 'config' },
 ]
@@ -99,6 +102,7 @@ const PAGE_MAP = {
   browser: Browser,
   ai: AIAssistant,
   mobile: MobileRemote,
+  components: ComponentsPage,
   settings: AppSettings,
   help: HelpDocs,
 }
@@ -234,6 +238,7 @@ function MainApp() {
             <PageComponent onNavigate={setPage} />
           </ErrorBoundary>
         </main>
+        <MediaPlayerBar />
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} onNavigate={setPage} />
     </div>

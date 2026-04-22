@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Zap, Plus, Trash2, Play, Edit2, X, Square, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { Zap, Plus, Trash2, Play, Edit2, X, Square, ChevronDown, ChevronUp, Info, AlertTriangle } from 'lucide-react'
+import WindowPicker from './WindowPicker'
 
 const STEP_TYPES = [
   { value: 'key',    label: 'Key Press',   placeholder: 'e.g. ctrl+alt+.  or  f5' },
@@ -41,6 +42,8 @@ function MacroModal({ macro, onSave, onClose }) {
   const [maxDuration, setMaxDuration] = useState(macro?.maxDuration ?? 0)
   const [cancelKey, setCancelKey]     = useState(macro?.cancelKey || '')
   const [targetWindow, setTargetWindow] = useState(macro?.targetWindow || '')
+  const [targetWindowRef, setTargetWindowRef] = useState(macro?.targetWindowRef || null)
+  const [sendMode, setSendMode]       = useState(macro?.sendMode || 'foreground')
   const [windowList, setWindowList]   = useState([])
 
   useEffect(() => {
@@ -62,6 +65,8 @@ function MacroModal({ macro, onSave, onClose }) {
       maxDuration: parseInt(maxDuration) || 0,
       cancelKey: cancelKey.trim(),
       targetWindow: targetWindow.trim(),
+      targetWindowRef: targetWindowRef || null,
+      sendMode,
       createdAt: macro?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     })
@@ -155,37 +160,69 @@ function MacroModal({ macro, onSave, onClose }) {
                 {/* Window targeting */}
                 <div className="card" style={{ padding: '14px 16px', background: 'var(--bg-3)' }}>
                   <div className="card-title mb-12" style={{ fontSize: 11 }}>Window Targeting</div>
+
                   <div className="form-group">
-                    <label className="form-label">Target Window Title</label>
-                    <div className="flex gap-8">
-                      <input
-                        className="input mono flex-1"
-                        value={targetWindow}
-                        onChange={e => setTargetWindow(e.target.value)}
-                        placeholder="e.g. Chrome  or  Notepad  (partial match)"
-                        list="window-list"
-                      />
-                      <datalist id="window-list">
-                        {windowList.map((w, i) => <option key={i} value={w} />)}
-                      </datalist>
-                    </div>
+                    <label className="form-label">Target Window</label>
+                    <WindowPicker value={targetWindowRef} onChange={setTargetWindowRef} />
                     <div className="flex items-start gap-6 mt-8">
                       <Info size={11} style={{ color: 'var(--text-3)', marginTop: 1, flexShrink: 0 }} />
                       <span className="text-xs text-muted">
-                        MacroBot will switch focus to this window before each loop, so keystrokes go to the right app even while you do other things.
-                        Leave blank to send to whatever window is active when the macro runs.
+                        Pick a window to target. Leave empty to send to whatever window is active when the macro runs.
                       </span>
                     </div>
-                    {windowList.length > 0 && (
-                      <div className="flex mt-8" style={{ flexWrap: 'wrap', gap: 4 }}>
-                        {windowList.slice(0, 8).map((w, i) => (
-                          <button key={i} className="btn btn-secondary btn-sm" style={{ fontSize: 10 }} onClick={() => setTargetWindow(w)}>
-                            {w.slice(0, 30)}{w.length > 30 ? '…' : ''}
-                          </button>
-                        ))}
+                  </div>
+
+                  <div className="form-group mt-12">
+                    <label className="form-label">Send Mode</label>
+                    <div className="send-mode-group">
+                      <button
+                        type="button"
+                        className={`btn btn-sm flex-1 ${sendMode === 'foreground' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setSendMode('foreground')}
+                      >
+                        Foreground (reliable)
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm flex-1 ${sendMode === 'background' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setSendMode('background')}
+                      >
+                        Background (no focus steal)
+                      </button>
+                    </div>
+                    <div className="text-xs text-muted mt-6">
+                      {sendMode === 'foreground'
+                        ? 'Activates the target window (brings it to front) before each loop. Works everywhere.'
+                        : 'Posts input directly to the window — keeps your current focus. Coordinates for clicks are window-relative.'}
+                    </div>
+                    {sendMode === 'background' && (
+                      <div className="bg-warning-banner mt-8">
+                        <AlertTriangle size={12} />
+                        <span>Some apps ignore background input — notably games (DirectInput/RawInput), Chromium-based apps (Discord, Chrome, VS Code), and windows running as administrator. Test before scheduling.</span>
                       </div>
                     )}
                   </div>
+
+                  {/* Legacy title field — kept for compatibility with old macros */}
+                  {!targetWindowRef && targetWindow && (
+                    <div className="form-group mt-12">
+                      <label className="form-label">Legacy Target Title <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>(from older version)</span></label>
+                      <div className="flex gap-8">
+                        <input
+                          className="input mono flex-1"
+                          value={targetWindow}
+                          onChange={e => setTargetWindow(e.target.value)}
+                          placeholder="e.g. Chrome  or  Notepad  (partial match)"
+                          list="window-list"
+                        />
+                        <button className="btn btn-ghost btn-sm" onClick={() => setTargetWindow('')}>Clear</button>
+                      </div>
+                      <datalist id="window-list">
+                        {windowList.map((w, i) => <option key={i} value={w} />)}
+                      </datalist>
+                      <div className="text-xs text-muted mt-4">Pick a window above to upgrade to the new picker.</div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -288,7 +325,14 @@ export default function MacroManager() {
                       {isRunning && <span className="badge badge-green animate-pulse">Running</span>}
                       <span className="badge badge-accent">{macro.steps?.length || 0} steps</span>
                       {loopLabel && <span className="badge" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>{loopLabel}</span>}
-                      {macro.targetWindow && <span className="badge" style={{ background: 'var(--yellow-dim)', color: 'var(--yellow)' }}>→ {macro.targetWindow.slice(0,20)}</span>}
+                      {macro.targetWindowRef?.processName && (
+                        <span className="badge" style={{ background: 'var(--yellow-dim)', color: 'var(--yellow)' }}>
+                          → {macro.targetWindowRef.processName.slice(0,20)}{macro.sendMode === 'background' ? ' (bg)' : ''}
+                        </span>
+                      )}
+                      {!macro.targetWindowRef && macro.targetWindow && (
+                        <span className="badge" style={{ background: 'var(--yellow-dim)', color: 'var(--yellow)' }}>→ {macro.targetWindow.slice(0,20)}</span>
+                      )}
                     </div>
                     {macro.description && <div className="text-muted text-sm mt-4">{macro.description}</div>}
                     {isRunning && (

@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('api', {
   windowTools: {
     snap: (position) => ipcRenderer.invoke('window:snap', position),
     list: () => ipcRenderer.invoke('window:list'),
+    listDetailed: () => ipcRenderer.invoke('window:listDetailed'),
     activate: (title) => ipcRenderer.invoke('window:activate', title),
   },
   scheduler: {
@@ -140,6 +141,10 @@ contextBridge.exposeInMainWorld('api', {
     open: (id) => ipcRenderer.invoke('media:open', id),
     pick: () => ipcRenderer.invoke('media:pick'),
   },
+  mediaPlayer: {
+    status:  () => ipcRenderer.invoke('media:status'),
+    control: (action) => ipcRenderer.invoke('media:control', action),
+  },
   bookmarks: {
     list: () => ipcRenderer.invoke('bookmarks:list'),
     save: (bm) => ipcRenderer.invoke('bookmarks:save', bm),
@@ -159,6 +164,7 @@ contextBridge.exposeInMainWorld('api', {
     changePassword: (payload) => ipcRenderer.invoke('auth:changePassword', payload),
     deleteAccount: (payload) => ipcRenderer.invoke('auth:deleteAccount', payload),
     recoveryLogin: (payload) => ipcRenderer.invoke('auth:recoveryLogin', payload),
+    verifyRecoveryCode: (payload) => ipcRenderer.invoke('auth:verifyRecoveryCode', payload),
   },
   splash: {
     onProgress: (cb) => ipcRenderer.on('splash:progress', (_, p) => cb(p)),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Volume2, VolumeX, Volume1, Headphones } from 'lucide-react'
 
 const PRESETS = [0, 10, 25, 50, 75, 100]
@@ -8,24 +8,69 @@ export default function VolumeControl() {
   const [muted, setMuted]     = useState(false)
   const [device, setDevice]   = useState('')
   const [setting, setSetting] = useState(false)
+  const [loaded, setLoaded]   = useState(false)
+  const applyTimer = useRef(null)
+  const lastApplied = useRef(null)
   const isElectron = !!window.api
 
+  // Load initial state — retry once if it doesn't return a number first time
+  // (WASAPI script can be slow on cold start).
   useEffect(() => {
-    if (!isElectron) return
-    window.api.volume.get().then(info => {
-      if (info?.name) setDevice(info.name)
-    }).catch(() => {})
-    window.api.volume.getLevel().then(lvl => {
-      if (typeof lvl === 'number') setVolume(lvl)
-    }).catch(() => {})
+    if (!isElectron) { setLoaded(true); return }
+    let cancelled = false
+    const fetchAll = async () => {
+      try {
+        const [info, lvl] = await Promise.all([
+          window.api.volume.get().catch(() => null),
+          window.api.volume.getLevel().catch(() => null),
+        ])
+        if (cancelled) return
+        if (info?.name) setDevice(info.name)
+        if (typeof lvl === 'number' && isFinite(lvl)) {
+          setVolume(Math.max(0, Math.min(100, Math.round(lvl))))
+          setLoaded(true)
+          return true
+        }
+      } catch {}
+      return false
+    }
+    ;(async () => {
+      const ok = await fetchAll()
+      if (!ok && !cancelled) {
+        // Retry once after 500ms (cold PowerShell start).
+        setTimeout(fetchAll, 500)
+        setLoaded(true)
+      }
+    })()
+    return () => { cancelled = true }
   }, [])
 
-  const apply = async (level) => {
+  // Apply volume to system — debounced so rapid slider drags coalesce into
+  // one IPC call per ~60ms (roughly one frame). We also skip duplicates.
+  const applyDebounced = (level) => {
+    if (!isElectron) return
+    if (applyTimer.current) clearTimeout(applyTimer.current)
+    applyTimer.current = setTimeout(async () => {
+      if (lastApplied.current === level) return
+      lastApplied.current = level
+      setSetting(true)
+      await window.api.volume.set(level).catch(() => {})
+      setSetting(false)
+    }, 60)
+  }
+
+  const onSliderChange = (level) => {
+    setVolume(level)
+    if (muted && level > 0) setMuted(false)
+    applyDebounced(level)
+  }
+
+  const applyNow = (level) => {
     setVolume(level)
     if (!isElectron) return
-    setSetting(true)
-    await window.api.volume.set(level).catch(() => {})
-    setSetting(false)
+    if (applyTimer.current) clearTimeout(applyTimer.current)
+    lastApplied.current = level
+    window.api.volume.set(level).catch(() => {})
   }
 
   const toggleMute = async () => {
@@ -36,7 +81,6 @@ export default function VolumeControl() {
   }
 
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 40 ? Volume1 : Volume2
-
   const arcColor = muted ? 'var(--text-3)' : volume > 80 ? 'var(--red)' : volume > 50 ? 'var(--yellow)' : 'var(--green)'
 
   return (
@@ -62,7 +106,7 @@ export default function VolumeControl() {
                 strokeWidth="8"
                 strokeDasharray={`${(muted ? 0 : volume) / 100 * 314} 314`}
                 strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 0.3s ease, stroke 0.3s ease' }}
+                style={{ transition: 'stroke-dasharray 0.15s ease, stroke 0.3s ease' }}
               />
             </svg>
             <div style={{
@@ -76,7 +120,7 @@ export default function VolumeControl() {
             </div>
           </div>
 
-          {/* Slider */}
+          {/* Slider — live application via onChange (debounced) */}
           <div style={{ width: '100%', maxWidth: 400 }}>
             <div className="slider-wrap">
               <button
@@ -93,16 +137,17 @@ export default function VolumeControl() {
                 step={1}
                 value={volume}
                 style={{ accentColor: arcColor }}
-                onChange={e => setVolume(parseInt(e.target.value))}
-                onPointerUp={e => apply(parseInt(e.target.value))}
-                onMouseUp={e => apply(parseInt(e.target.value))}
+                onChange={e => onSliderChange(parseInt(e.target.value))}
                 disabled={muted}
               />
               <span className="slider-value">{muted ? '—' : `${volume}%`}</span>
             </div>
           </div>
 
-          {setting && (
+          {!loaded && isElectron && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Reading current volume…</div>
+          )}
+          {setting && loaded && (
             <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Applying…</div>
           )}
         </div>
@@ -117,7 +162,7 @@ export default function VolumeControl() {
               key={p}
               className={`btn ${volume === p && !muted ? 'btn-primary' : 'btn-secondary'}`}
               style={{ minWidth: 64 }}
-              onClick={() => { setMuted(false); apply(p) }}
+              onClick={() => { setMuted(false); applyNow(p) }}
             >
               {p === 0 ? <><VolumeX size={12} /> Mute</> : `${p}%`}
             </button>

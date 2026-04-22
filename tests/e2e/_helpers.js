@@ -1,15 +1,20 @@
 // Shared helpers for Electron E2E
 const { _electron: electron } = require('@playwright/test')
 const path = require('path')
+const os   = require('os')
+const fs   = require('fs')
 
 /**
  * Launch the Scotty MacroBot Electron app in test mode.
- * Uses a throwaway userData directory per run to keep state isolated.
+ * Uses a throwaway userData directory per run (in the OS temp dir so it never
+ * clutters the repo) to keep state isolated.
  * Automatically provisions a local test user + signs them in so the AuthGate
  * doesn't block subsequent test steps.
  */
 async function launchApp(opts = {}) {
-  const userData = path.join(__dirname, '..', '..', '.playwright-userdata-' + Date.now())
+  const tmpRoot = path.join(os.tmpdir(), 'macrobot-playwright')
+  try { fs.mkdirSync(tmpRoot, { recursive: true }) } catch {}
+  const userData = path.join(tmpRoot, 'userdata-' + Date.now() + '-' + Math.floor(Math.random() * 1e6))
   const app = await electron.launch({
     args: [path.join(__dirname, '..', '..'), `--user-data-dir=${userData}`],
     cwd: path.join(__dirname, '..', '..'),

@@ -92,6 +92,185 @@ async function activateWindow(titleSearch) {
   await delay(250)
 }
 
+// ─── Background Window Targeting (no focus steal) ─────────────────────────────
+// Uses user32!PostMessageW to deliver WM_KEYDOWN/WM_KEYUP/WM_CHAR/WM_LBUTTON* to
+// a specific HWND. Works for most classic Win32 apps (Notepad, Explorer, WinForms,
+// WPF). Many modern apps (games with DirectInput/RawInput, Chromium/Electron,
+// elevated admin windows) will ignore these messages — users are warned in the UI.
+
+// Shared P/Invoke + helpers block injected into every background PS call.
+const BG_WINTOOLS_PREFIX = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class MB_Win {
+  [DllImport("user32.dll", CharSet=CharSet.Auto)] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet=CharSet.Auto, SetLastError=true)] public static extern int GetWindowTextLength(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet=CharSet.Auto, SetLastError=true)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+  [DllImport("user32.dll", CharSet=CharSet.Auto, SetLastError=true)] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern short VkKeyScan(char ch);
+  [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint uCode, uint uMapType);
+  public const uint WM_KEYDOWN    = 0x0100;
+  public const uint WM_KEYUP      = 0x0101;
+  public const uint WM_CHAR       = 0x0102;
+  public const uint WM_SYSKEYDOWN = 0x0104;
+  public const uint WM_SYSKEYUP   = 0x0105;
+  public const uint WM_LBUTTONDOWN = 0x0201;
+  public const uint WM_LBUTTONUP   = 0x0202;
+  public const uint WM_RBUTTONDOWN = 0x0204;
+  public const uint WM_RBUTTONUP   = 0x0205;
+}
+"@
+`
+
+// Enumerate all top-level visible windows with title, class, pid, process name.
+async function getWindowsDetailed() {
+  const script = `${BG_WINTOOLS_PREFIX}
+$results = New-Object System.Collections.ArrayList
+$callback = [MB_Win+EnumWindowsProc] {
+  param($hWnd, $lParam)
+  if (-not [MB_Win]::IsWindowVisible($hWnd)) { return $true }
+  $len = [MB_Win]::GetWindowTextLength($hWnd)
+  if ($len -le 0) { return $true }
+  $sb = New-Object System.Text.StringBuilder ($len + 2)
+  [MB_Win]::GetWindowText($hWnd, $sb, $sb.Capacity) | Out-Null
+  $title = $sb.ToString()
+  if ([string]::IsNullOrWhiteSpace($title)) { return $true }
+  $cn = New-Object System.Text.StringBuilder 256
+  [MB_Win]::GetClassName($hWnd, $cn, 256) | Out-Null
+  $procId = 0
+  [MB_Win]::GetWindowThreadProcessId($hWnd, [ref]$procId) | Out-Null
+  $procName = ''
+  try { $procName = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName } catch {}
+  $null = $results.Add([PSCustomObject]@{
+    hwnd = [int64]$hWnd
+    pid = [int]$procId
+    title = $title
+    className = $cn.ToString()
+    processName = $procName
+  })
+  return $true
+}
+[MB_Win]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+$results | ConvertTo-Json -Compress -Depth 3
+`
+  const out = await psRun(script)
+  try {
+    const d = JSON.parse(out)
+    return Array.isArray(d) ? d : (d ? [d] : [])
+  } catch { return [] }
+}
+
+// Re-resolve an HWND from a saved ref when the stored hwnd is no longer valid.
+// Ref shape: { hwnd, pid, processName, titlePattern, className }
+async function resolveHwnd(ref) {
+  if (!ref) return 0
+  // Try the stored hwnd first.
+  if (ref.hwnd) {
+    const verify = await psRun(`${BG_WINTOOLS_PREFIX}
+if ([MB_Win]::IsWindow([IntPtr]${ref.hwnd})) { "1" } else { "0" }`)
+    if (verify.trim() === '1') return Number(ref.hwnd)
+  }
+  // Fallback: re-enumerate and match by processName + titlePattern (case-insensitive substring).
+  const all = await getWindowsDetailed()
+  const wantProc = (ref.processName || '').toLowerCase()
+  const wantTitle = (ref.titlePattern || '').toLowerCase()
+  const match = all.find(w => {
+    if (wantProc && (w.processName || '').toLowerCase() !== wantProc) return false
+    if (wantTitle && !(w.title || '').toLowerCase().includes(wantTitle)) return false
+    return true
+  })
+  return match ? Number(match.hwnd) : 0
+}
+
+// Map a single token (like 'enter', 'f5', 'a', '.') to a Windows virtual key code.
+const VK_MAP = {
+  enter: 0x0D, return: 0x0D, tab: 0x09, esc: 0x1B, escape: 0x1B, space: 0x20,
+  backspace: 0x08, delete: 0x2E, del: 0x2E, insert: 0x2D, ins: 0x2D,
+  up: 0x26, down: 0x28, left: 0x25, right: 0x27,
+  home: 0x24, end: 0x23, pageup: 0x21, pagedown: 0x22,
+  f1: 0x70, f2: 0x71, f3: 0x72, f4: 0x73, f5: 0x74, f6: 0x75,
+  f7: 0x76, f8: 0x77, f9: 0x78, f10: 0x79, f11: 0x7A, f12: 0x7B,
+  ctrl: 0x11, control: 0x11, alt: 0x12, shift: 0x10, win: 0x5B, meta: 0x5B,
+}
+
+function tokenToVk(tok) {
+  const t = (tok || '').toLowerCase().trim()
+  if (!t) return 0
+  if (VK_MAP[t] != null) return VK_MAP[t]
+  if (t.length === 1) {
+    const ch = t.toUpperCase().charCodeAt(0)
+    if (ch >= 0x30 && ch <= 0x39) return ch       // 0-9
+    if (ch >= 0x41 && ch <= 0x5A) return ch       // A-Z
+  }
+  return 0
+}
+
+// Post a full chord (Ctrl+Alt+Key style) to an HWND. Falls back to main-key-only
+// if modifier VKs couldn't be parsed.
+async function sendKeysToHwnd(hwnd, combo) {
+  if (!hwnd) return
+  const parts = (combo || '').split('+').map(s => s.trim()).filter(Boolean)
+  const mods = []
+  let mainTok = ''
+  for (const p of parts) {
+    const low = p.toLowerCase()
+    if (low === 'ctrl' || low === 'control') mods.push(0x11)
+    else if (low === 'alt') mods.push(0x12)
+    else if (low === 'shift') mods.push(0x10)
+    else if (low === 'win' || low === 'meta') mods.push(0x5B)
+    else mainTok = p
+  }
+  const mainVk = tokenToVk(mainTok)
+  if (!mainVk) return
+  // Build PS commands that post modifier down -> key down -> key up -> modifier up.
+  const downs = mods.map(m => `[MB_Win]::PostMessage([IntPtr]${hwnd}, [MB_Win]::WM_KEYDOWN, [IntPtr]${m}, [IntPtr]0) | Out-Null`).join("`n")
+  const ups   = mods.slice().reverse().map(m => `[MB_Win]::PostMessage([IntPtr]${hwnd}, [MB_Win]::WM_KEYUP,   [IntPtr]${m}, [IntPtr]0) | Out-Null`).join("`n")
+  const script = `${BG_WINTOOLS_PREFIX}
+${downs}
+[MB_Win]::PostMessage([IntPtr]${hwnd}, [MB_Win]::WM_KEYDOWN, [IntPtr]${mainVk}, [IntPtr]0) | Out-Null
+Start-Sleep -Milliseconds 15
+[MB_Win]::PostMessage([IntPtr]${hwnd}, [MB_Win]::WM_KEYUP,   [IntPtr]${mainVk}, [IntPtr]0) | Out-Null
+${ups}
+`
+  await psRun(script)
+}
+
+// Type Unicode text into HWND via WM_CHAR (handles any codepoint natively).
+async function sendTextToHwnd(hwnd, text) {
+  if (!hwnd || !text) return
+  const codes = []
+  for (const ch of String(text)) codes.push(ch.codePointAt(0))
+  const lines = codes.map(c => `[MB_Win]::PostMessage([IntPtr]${hwnd}, [MB_Win]::WM_CHAR, [IntPtr]${c}, [IntPtr]0) | Out-Null`).join("`n")
+  const script = `${BG_WINTOOLS_PREFIX}
+${lines}
+`
+  await psRun(script)
+}
+
+// Click at client-relative (x,y) on HWND.
+async function clickHwnd(hwnd, x, y, button = 'left') {
+  if (!hwnd) return
+  const cx = Math.max(0, parseInt(x) || 0)
+  const cy = Math.max(0, parseInt(y) || 0)
+  const lParam = ((cy & 0xFFFF) << 16) | (cx & 0xFFFF)
+  const downMsg = button === 'right' ? '[MB_Win]::WM_RBUTTONDOWN' : '[MB_Win]::WM_LBUTTONDOWN'
+  const upMsg   = button === 'right' ? '[MB_Win]::WM_RBUTTONUP'   : '[MB_Win]::WM_LBUTTONUP'
+  const script = `${BG_WINTOOLS_PREFIX}
+[MB_Win]::PostMessage([IntPtr]${hwnd}, ${downMsg}, [IntPtr]1, [IntPtr]${lParam}) | Out-Null
+Start-Sleep -Milliseconds 20
+[MB_Win]::PostMessage([IntPtr]${hwnd}, ${upMsg},   [IntPtr]0, [IntPtr]${lParam}) | Out-Null
+`
+  await psRun(script)
+}
+
 function launchApp(appPath) {
   try { exec(`start "" "${appPath}"`) } catch {}
 }
@@ -99,32 +278,60 @@ function launchApp(appPath) {
 // ─── Macro Execution ──────────────────────────────────────────────────────────
 let runningMacros = {}
 
-async function executeStep(step) {
+// ctx: { sendMode: 'foreground'|'background', hwnd: number }
+async function executeStep(step, ctx) {
+  const bg = ctx && ctx.sendMode === 'background' && ctx.hwnd
   switch (step.type) {
-    case 'key':    await sendKeys(step.value); break
-    case 'text':   await typeText(step.value); break
-    case 'delay':  await delay(parseInt(step.value) || 500); break
-    case 'click':  { const [x,y] = (step.value||'0,0').split(',').map(Number); await mouseClick(x,y); break }
-    case 'app':    launchApp(step.value); break
+    case 'key':
+      if (bg) await sendKeysToHwnd(ctx.hwnd, step.value)
+      else    await sendKeys(step.value)
+      break
+    case 'text':
+      if (bg) await sendTextToHwnd(ctx.hwnd, step.value)
+      else    await typeText(step.value)
+      break
+    case 'delay':
+      await delay(parseInt(step.value) || 500)
+      break
+    case 'click': {
+      const [x, y] = (step.value || '0,0').split(',').map(Number)
+      if (bg) await clickHwnd(ctx.hwnd, x, y)
+      else    await mouseClick(x, y)
+      break
+    }
+    case 'app':
+      launchApp(step.value)
+      break
     case 'repeat':
-      for (let r = 0; r < (parseInt(step.count)||1); r++) {
-        await sendKeys(step.value); await delay(parseInt(step.interval)||100)
+      for (let r = 0; r < (parseInt(step.count) || 1); r++) {
+        if (bg) await sendKeysToHwnd(ctx.hwnd, step.value)
+        else    await sendKeys(step.value)
+        await delay(parseInt(step.interval) || 100)
       }
       break
   }
 }
 
-async function executeMacro(macroId) {
+async function executeMacro(macroId, overrides) {
   const macro = store.macros.find(m => m.id === macroId)
   if (!macro) return { success: false, error: 'Macro not found' }
   if (runningMacros[macroId]) return { success: false, error: 'Already running' }
+
+  // Merge any scheduler overrides onto the macro (overrides win).
+  const effective = { ...macro, ...(overrides || {}) }
+  const sendMode = effective.sendMode === 'background' ? 'background' : 'foreground'
+  // Build a targetWindowRef from new-style field, or migrate legacy targetWindow string.
+  let targetRef = effective.targetWindowRef || null
+  if (!targetRef && effective.targetWindow?.trim()) {
+    targetRef = { titlePattern: effective.targetWindow.trim() }
+  }
 
   runningMacros[macroId] = true
   mainWindow?.webContents.send('macro:status', { id: macroId, status: 'running' })
   broadcastToMobile({ type: 'macro:status', id: macroId, status: 'running' })
 
   // Register temporary cancel shortcut
-  const cancelKey = macro.cancelKey
+  const cancelKey = effective.cancelKey
   if (cancelKey) {
     try {
       globalShortcut.register(cancelKey, () => {
@@ -135,32 +342,43 @@ async function executeMacro(macroId) {
   }
 
   try {
-    const loopCount = parseInt(macro.loopCount) || 1
+    const loopCount = parseInt(effective.loopCount) || 1
     const infinite = loopCount === 0
-    const maxDuration = parseInt(macro.maxDuration) || 0
+    const maxDuration = parseInt(effective.maxDuration) || 0
     const startTime = Date.now()
-    const steps = macro.steps || []
+    const steps = effective.steps || []
     let loop = 0
 
     while (infinite || loop < loopCount) {
       if (!runningMacros[macroId]) break
       if (maxDuration > 0 && (Date.now() - startTime) > maxDuration * 1000) break
 
-      // Window targeting before each loop
-      if (macro.targetWindow?.trim()) {
-        await activateWindow(macro.targetWindow.trim())
+      // Window targeting: foreground activates, background re-resolves HWND.
+      let ctx = { sendMode, hwnd: 0 }
+      if (targetRef) {
+        if (sendMode === 'background') {
+          ctx.hwnd = await resolveHwnd(targetRef)
+          if (!ctx.hwnd) {
+            mainWindow?.webContents.send('macro:status', { id: macroId, status: 'error', error: 'Target window not found' })
+            break
+          }
+        } else {
+          // Legacy foreground path — activate by title.
+          const title = targetRef.titlePattern || targetRef.title
+          if (title) await activateWindow(title)
+        }
       }
 
       for (let i = 0; i < steps.length; i++) {
         if (!runningMacros[macroId]) break
         const pct = Math.round(((loop * steps.length + i) / ((infinite ? 1 : loopCount) * steps.length)) * 100)
         mainWindow?.webContents.send('macro:progress', { id: macroId, step: i, total: steps.length, loop, loopCount: infinite ? '∞' : loopCount, pct })
-        await executeStep(steps[i])
+        await executeStep(steps[i], ctx)
       }
 
       // Inter-loop delay
-      if (macro.loopDelay && parseInt(macro.loopDelay) > 0) {
-        await delay(parseInt(macro.loopDelay))
+      if (effective.loopDelay && parseInt(effective.loopDelay) > 0) {
+        await delay(parseInt(effective.loopDelay))
       }
 
       loop++
@@ -368,7 +586,11 @@ function checkScheduledTasks() {
   for (const task of tasks) {
     if (!task.enabled) continue
     if (!shouldRunTask(task, now)) continue
-    executeMacro(task.macroId)
+    // Scheduler may override the macro's target window and send mode.
+    const overrides = {}
+    if (task.overrideTarget && task.targetWindowRef) overrides.targetWindowRef = task.targetWindowRef
+    if (task.overrideTarget && task.sendMode) overrides.sendMode = task.sendMode
+    executeMacro(task.macroId, overrides)
     task.lastRun = now.toISOString()
     mainWindow?.webContents.send('scheduler:ran', { id: task.id, time: task.lastRun })
   }
@@ -759,6 +981,21 @@ ipcMain.handle('auth:recoveryLogin', (_, payload) => {
   return { success: true, recoveryCode: newRecovery }
 })
 
+// Verify the signed-in user's recovery code (used by Forgot-PIN flow).
+// Returns { success: true } without modifying anything on match.
+ipcMain.handle('auth:verifyRecoveryCode', (_, payload) => {
+  authLib.ensureShape(store)
+  const user = currentUserRecord()
+  if (!user || !user.recoveryCodeHash) return { success: false, error: 'No recovery code on file.' }
+  const code = (payload?.recoveryCode || '').trim()
+  if (!code) return { success: false, error: 'Enter your recovery code.' }
+  const { hash } = authLib.hashPassword(code, user.recoveryCodeSalt)
+  const a = Buffer.from(hash, 'hex'); const b = Buffer.from(user.recoveryCodeHash, 'hex')
+  const ok = a.length === b.length && require('crypto').timingSafeEqual(a, b)
+  if (!ok) return { success: false, error: 'Invalid recovery code.' }
+  return { success: true }
+})
+
 // ─── Per-user data access helpers ─────────────────────────────────────────────
 // Private slices are stored under store.userData[activeUserId]. Reads fall back
 // to top-level values for backwards compatibility during migration.
@@ -842,6 +1079,7 @@ ipcMain.handle('expander:restart', () => {
 
 ipcMain.handle('window:snap', (_, position) => snapWindow(position))
 ipcMain.handle('window:list', () => getOpenWindows())
+ipcMain.handle('window:listDetailed', () => getWindowsDetailed())
 ipcMain.handle('window:activate', (_, title) => activateWindow(title))
 
 ipcMain.handle('scheduler:list', () => store.scheduledTasks || [])
@@ -976,6 +1214,102 @@ public class KeySim { [DllImport("user32.dll")] public static extern void keybd_
 [KeySim]::keybd_event(0xAD, 0, 0, [UIntPtr]::Zero); [KeySim]::keybd_event(0xAD, 0, 2, [UIntPtr]::Zero)`).catch(() => {})
   }
   return true
+})
+
+// ── Windows SMTC: media playback info + controls ─────────────────────────────
+// Uses Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager
+// via PowerShell WinRT. Polled by MediaPlayerBar.
+const SMTC_AWAIT_HELPER = `
+Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null
+function Await($op, $resultType) {
+  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+    ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' } |
+    Select-Object -First 1
+  $task = $asTask.MakeGenericMethod($resultType).Invoke($null, @($op))
+  $task.Wait(-1) | Out-Null
+  $task.Result
+}
+function AwaitAction($op) {
+  $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() |
+    ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' } |
+    Select-Object -First 1
+  $task = $asTask.Invoke($null, @($op))
+  $task.Wait(-1) | Out-Null
+}
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSession,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
+[Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime] | Out-Null
+[Windows.Storage.Streams.Buffer,Windows.Storage.Streams,ContentType=WindowsRuntime] | Out-Null
+`
+
+ipcMain.handle('media:status', async () => {
+  try {
+    const script = `${SMTC_AWAIT_HELPER}
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+if ($mgr -eq $null) { Write-Output 'NOSESSION'; exit }
+$session = $mgr.GetCurrentSession()
+if ($session -eq $null) { Write-Output 'NOSESSION'; exit }
+$props = Await ($session.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+$info  = $session.GetPlaybackInfo()
+$status = $info.PlaybackStatus.ToString()
+$obj = @{
+  hasSession = $true
+  title      = [string]$props.Title
+  artist     = [string]$props.Artist
+  albumTitle = [string]$props.AlbumTitle
+  status     = $status
+  appId      = [string]$session.SourceAppUserModelId
+}
+# Thumbnail
+try {
+  if ($props.Thumbnail -ne $null) {
+    $stream = Await ($props.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+    $size = [int]$stream.Size
+    if ($size -gt 0 -and $size -lt 3000000) {
+      $reader = [Windows.Storage.Streams.DataReader]::new($stream)
+      Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
+      $bytes = New-Object byte[] $size
+      $reader.ReadBytes($bytes)
+      $obj.thumbnail = [Convert]::ToBase64String($bytes)
+      $obj.thumbnailMime = [string]$stream.ContentType
+    }
+  }
+} catch {}
+$obj | ConvertTo-Json -Depth 4 -Compress`
+    const raw = await psRun(script)
+    const t = (raw || '').trim()
+    if (!t || t === 'NOSESSION') return { hasSession: false }
+    try { return JSON.parse(t) } catch { return { hasSession: false } }
+  } catch {
+    return { hasSession: false, error: 'unavailable' }
+  }
+})
+
+ipcMain.handle('media:control', async (_, action) => {
+  const map = {
+    play:       'TryPlayAsync',
+    pause:      'TryPauseAsync',
+    playpause:  'TryTogglePlayPauseAsync',
+    next:       'TrySkipNextAsync',
+    previous:   'TrySkipPreviousAsync',
+    stop:       'TryStopAsync',
+  }
+  const method = map[action]
+  if (!method) return { success: false, error: 'Unknown action' }
+  try {
+    const script = `${SMTC_AWAIT_HELPER}
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+if ($mgr -eq $null) { Write-Output 'NOSESSION'; exit }
+$session = $mgr.GetCurrentSession()
+if ($session -eq $null) { Write-Output 'NOSESSION'; exit }
+$r = Await ($session.${method}()) ([bool])
+Write-Output ([string]$r)`
+    const out = await psRun(script)
+    const ok = (out || '').trim().toLowerCase() === 'true'
+    return { success: ok }
+  } catch (e) {
+    return { success: false, error: String(e?.message || e) }
+  }
 })
 
 
