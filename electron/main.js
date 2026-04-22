@@ -1899,6 +1899,71 @@ function installAdBlocker() {
 }
 
 
+// ─── Windows File Associations ("Open with Multitool") ───────────────────────
+// Registers the app under HKCU so Windows can offer it as an "Open with"
+// choice for a small set of text-ish file extensions. Uses HKCU so no elevated
+// permissions are needed; the per-user registry writes are fully reversible.
+const APP_REG_KEY = 'ScottyMultitool.1'
+function ensureAppCommandKey() {
+  // Build a canonical exec command line that forwards the file path to the app.
+  const exe = process.execPath.replace(/'/g, "''")
+  const args = isDev ? '--dev ' : ''
+  const cmd = `"${exe.replace(/"/g, '\\"')}" ${args}"%1"`
+  const quoted = cmd.replace(/'/g, "''")
+  return `
+New-Item -Path "HKCU:\\Software\\Classes\\${APP_REG_KEY}" -Force | Out-Null
+New-ItemProperty -Path "HKCU:\\Software\\Classes\\${APP_REG_KEY}" -Name "(Default)" -Value "Scotty Multitool" -PropertyType String -Force | Out-Null
+New-Item -Path "HKCU:\\Software\\Classes\\${APP_REG_KEY}\\shell\\open\\command" -Force | Out-Null
+New-ItemProperty -Path "HKCU:\\Software\\Classes\\${APP_REG_KEY}\\shell\\open\\command" -Name "(Default)" -Value '${quoted}' -PropertyType String -Force | Out-Null
+`
+}
+ipcMain.handle('shell:registerFileAssoc', async (_, exts) => {
+  const list = Array.isArray(exts) && exts.length ? exts : ['.txt','.md','.json','.log','.csv']
+  const parts = [ensureAppCommandKey()]
+  for (const raw of list) {
+    const ext = String(raw).trim().toLowerCase()
+    if (!/^\.[a-z0-9]+$/.test(ext)) continue
+    parts.push(`
+New-Item -Path "HKCU:\\Software\\Classes\\${ext}\\OpenWithProgids" -Force | Out-Null
+New-ItemProperty -Path "HKCU:\\Software\\Classes\\${ext}\\OpenWithProgids" -Name "${APP_REG_KEY}" -Value "" -PropertyType String -Force | Out-Null
+`)
+  }
+  try { await psRun(parts.join('\n')); return { success: true, registered: list } }
+  catch (e) { return { success: false, error: String(e?.message || e) } }
+})
+ipcMain.handle('shell:unregisterFileAssoc', async (_, exts) => {
+  const list = Array.isArray(exts) && exts.length ? exts : ['.txt','.md','.json','.log','.csv']
+  const parts = []
+  for (const raw of list) {
+    const ext = String(raw).trim().toLowerCase()
+    if (!/^\.[a-z0-9]+$/.test(ext)) continue
+    parts.push(`Remove-ItemProperty -Path "HKCU:\\Software\\Classes\\${ext}\\OpenWithProgids" -Name "${APP_REG_KEY}" -ErrorAction SilentlyContinue`)
+  }
+  parts.push(`Remove-Item -Path "HKCU:\\Software\\Classes\\${APP_REG_KEY}" -Recurse -ErrorAction SilentlyContinue`)
+  try { await psRun(parts.join('\n')); return { success: true } }
+  catch (e) { return { success: false, error: String(e?.message || e) } }
+})
+
+// When Windows launches us with a file path argv, stash it so the renderer can
+// read it once it finishes booting and route to the appropriate component.
+let launchedWithFile = null
+{
+  // Drop electron's own exec path + dev flags; the last non-flag token is the file.
+  const args = process.argv.slice(1).filter(a => a && !a.startsWith('--'))
+  const candidate = args[args.length - 1]
+  if (candidate && /\.(txt|md|json|log|csv)$/i.test(candidate)) {
+    try {
+      const full = path.resolve(candidate)
+      if (fs.existsSync(full)) launchedWithFile = full
+    } catch {}
+  }
+}
+ipcMain.handle('shell:getLaunchFile', () => {
+  const f = launchedWithFile
+  launchedWithFile = null
+  return f
+})
+
 app.whenReady().then(() => {
   // Skip splash in test mode to keep Playwright's firstWindow() deterministic.
   if (!process.env.MACROBOT_TEST) createSplash()

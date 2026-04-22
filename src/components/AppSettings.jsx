@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings, Key, Smartphone, Bell, Palette, Save, Check, RefreshCw, Lock, X, Download } from 'lucide-react'
+import { Settings, Key, Smartphone, Bell, Palette, Save, Check, RefreshCw, Lock, X, Download, FileCog } from 'lucide-react'
 import { sha256 } from './PinLock'
 import ProfileSection from './Auth/ProfileSection'
 
@@ -235,6 +235,11 @@ export default function AppSettings() {
         </div>
       </Section>
 
+      {/* Windows Shell Integration */}
+      <Section title="Windows Integration" icon={FileCog}>
+        <ShellIntegrationPanel />
+      </Section>
+
       {/* PIN Lock */}
       <Section title="Journal PIN Lock" icon={Lock}>
         <div className="flex items-center justify-between">
@@ -319,6 +324,70 @@ export default function AppSettings() {
           All data (macros, hotkeys, settings) is stored locally on your computer. No data is ever sent to external servers unless you configure an API key for AI features.
         </div>
       </Section>
+    </div>
+  )
+}
+
+// ── Windows Shell Integration panel ──────────────────────────────────────────
+// Lets the user register/unregister Multitool as an "Open with" option for
+// a small set of file extensions. Uses HKCU under the hood (reversible).
+function ShellIntegrationPanel() {
+  const DEFAULT_EXTS = ['.txt', '.md', '.json', '.log', '.csv']
+  const [exts, setExts] = React.useState(DEFAULT_EXTS)
+  const [busy, setBusy] = React.useState(false)
+  const [status, setStatus] = React.useState(null)
+  const isElectron = !!window.api
+
+  const toggle = (e) => {
+    setExts(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])
+  }
+
+  const register = async () => {
+    if (!isElectron) return
+    setBusy(true); setStatus(null)
+    const r = await window.api.shellIntegration.register(exts)
+    setBusy(false)
+    setStatus(r?.success
+      ? { ok: true, msg: `Registered: ${exts.join(', ')}. Right-click a matching file → Open with → Choose another app.` }
+      : { ok: false, msg: r?.error || 'Failed to register' })
+  }
+  const unregister = async () => {
+    if (!isElectron) return
+    setBusy(true); setStatus(null)
+    const r = await window.api.shellIntegration.unregister(DEFAULT_EXTS)
+    setBusy(false)
+    setStatus(r?.success
+      ? { ok: true, msg: 'Unregistered. Multitool will no longer appear in "Open with".' }
+      : { ok: false, msg: r?.error || 'Failed to unregister' })
+  }
+
+  return (
+    <div>
+      <div className="text-sm text-muted mb-8">
+        Register Multitool as an "Open with" handler for these file types. Files opened this way land in the File Manager preview.
+      </div>
+      <div className="flex gap-6 mb-12" style={{ flexWrap: 'wrap' }}>
+        {DEFAULT_EXTS.map(e => (
+          <button key={e}
+            className={`btn btn-sm ${exts.includes(e) ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => toggle(e)}>
+            {e}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-8">
+        <button className="btn btn-primary btn-sm" onClick={register} disabled={busy || !isElectron || exts.length === 0}>
+          Register selected
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={unregister} disabled={busy || !isElectron}>
+          Unregister
+        </button>
+      </div>
+      {status && (
+        <div className="text-xs mt-8" style={{ color: status.ok ? 'var(--green)' : 'var(--red)' }}>
+          {status.msg}
+        </div>
+      )}
     </div>
   )
 }

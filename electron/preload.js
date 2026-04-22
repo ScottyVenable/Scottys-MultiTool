@@ -125,6 +125,11 @@ contextBridge.exposeInMainWorld('api', {
   cli: {
     open: () => ipcRenderer.invoke('cli:open'),
   },
+  shellIntegration: {
+    register: (exts) => ipcRenderer.invoke('shell:registerFileAssoc', exts),
+    unregister: (exts) => ipcRenderer.invoke('shell:unregisterFileAssoc', exts),
+    getLaunchFile: () => ipcRenderer.invoke('shell:getLaunchFile'),
+  },
   aiSettings: {
     get: () => ipcRenderer.invoke('aiSettings:get'),
     set: (val) => ipcRenderer.invoke('aiSettings:set', val),

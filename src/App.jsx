@@ -150,6 +150,19 @@ function MainApp() {
     window.api.macros.list().then(m => setMacroCounts(m.length)).catch(() => {})
   }, [page])
 
+  // If Windows launched the app with a file path ("Open with Multitool"),
+  // route to the File Manager once on mount. Backend pops the value so this
+  // only fires on cold start.
+  useEffect(() => {
+    if (!isElectron || !window.api.shellIntegration?.getLaunchFile) return
+    window.api.shellIntegration.getLaunchFile().then(f => {
+      if (f) {
+        try { sessionStorage.setItem('launchFile', f) } catch {}
+        setPage('file-manager')
+      }
+    }).catch(() => {})
+  }, [])
+
   // Apply per-user accent + theme whenever the active user changes
   useEffect(() => {
     if (user?.preferences?.accentColor) {
