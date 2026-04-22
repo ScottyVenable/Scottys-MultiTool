@@ -2,18 +2,12 @@
 
 ## Next
 
-- Local server + launcher CLI (menu to run tests, start app, start server, tail logs) with dedicated console and structured logging. App gets a bottom status bar with server-state pill (red / yellow / green) and other component indicators.
-- Browser takes over most of the screen: pinned-component sidebar on the left, compact header with controls, exit button back to main menu, splash before entering, and a "fetched info" summary surface with a "View in Browser" action.
-- Fix the occasional security / suspicious-content warning the browser shows when fetching remote info.
-- Universal currency + challenges: earn coins from focus sessions / chores / reminders / daily challenges, spend in a small rewards panel, pill in topbar. Local-only until the social layer lands.
-
-## Needs server (scaffold once local server exists)
-
 - Friends list + presence (dynamic status like "focusing on ...", "playing ...", "relaxing").
 - Household invites and chore assignment across friends.
 - Messages center (separate from notifications bell) with click-to-open conversation view.
 - Focus-with-friends: shared timers, quorum-pause, leaderboards, badges.
 - Premium currency tier + referral rewards.
+- Spend coins rewards panel (redeem coins for themes, titles, customization).
 
 ## Known bugs
 
@@ -33,3 +27,7 @@
 - Monaco IDE with file tree, terminal, AI panel - f60f968e
 - Chrome DevTools Protocol target - 867e0b2d
 - Media Library rendering, LM Studio error banner, rounded chat avatars, Notifications Center - 24652326
+- Local server (Express + WS) + launcher CLI + bottom status bar - fe5689df
+- Browser: exit button, pinned sidebar, fetched-info card, cert-error handling - 176fc453
+- Currency system: coins, daily challenges, topbar pill - bf71ead8
+- Fix server:state IPC channel + auto-start on launch - 47d96334

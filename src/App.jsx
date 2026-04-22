@@ -4,7 +4,7 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2
+  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2, Users, MessageSquare
 } from 'lucide-react'
 import WelcomeScreen from './components/WelcomeScreen'
 import Dashboard from './components/Dashboard'
@@ -41,6 +41,9 @@ import { NotificationsProvider } from './components/NotificationsContext'
 import NotificationsCenter from './components/NotificationsCenter'
 import { CurrencyProvider } from './components/CurrencyContext'
 import CoinsPill from './components/CoinsPill'
+import FriendsPanel from './components/FriendsPanel'
+import MessagesCenter from './components/MessagesCenter'
+import { FriendsProvider } from './components/FriendsContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
 import CommandPalette from './components/CommandPalette'
@@ -70,6 +73,8 @@ const NAV = [
   { id: 'reminders',     label: 'Reminders',       icon: Bell,            section: 'personal' },
   { id: 'chores',        label: 'Chore Planner',   icon: Trophy,          section: 'personal' },
   { id: 'media',         label: 'Media Library',   icon: ImageIcon,       section: 'personal' },
+  { id: 'friends',       label: 'Friends',         icon: Users,           section: 'connect' },
+  { id: 'messages',      label: 'Messages',        icon: MessageSquare,   section: 'connect' },
   { id: 'browser',       label: 'Browser',         icon: Globe,           section: 'connect' },
   { id: 'ai',            label: 'AI Workstation',  icon: Bot,             section: 'connect' },
   { id: 'mobile',        label: 'Mobile Remote',   icon: Smartphone,      section: 'connect' },
@@ -110,6 +115,8 @@ const PAGE_MAP = {
   reminders: Reminders,
   chores: ChorePlanner,
   media: MediaLibrary,
+  friends: FriendsPanel,
+  messages: MessagesCenter,
   browser: Browser,
   ai: AIAssistant,
   mobile: MobileRemote,
@@ -281,11 +288,13 @@ export default function App() {
       <ToastProvider>
         <NotificationsProvider>
           <CurrencyProvider>
-            <AIAttachmentProvider>
-              <AuthGate>
-                <MainApp />
-              </AuthGate>
-            </AIAttachmentProvider>
+            <FriendsProvider>
+              <AIAttachmentProvider>
+                <AuthGate>
+                  <MainApp />
+                </AuthGate>
+              </AIAttachmentProvider>
+            </FriendsProvider>
           </CurrencyProvider>
         </NotificationsProvider>
       </ToastProvider>
