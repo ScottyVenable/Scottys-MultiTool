@@ -1325,3 +1325,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .status-menu-row.err { color: var(--red); }
 .status-menu-btn { padding:6px 8px; background: var(--bg-2); border:1px solid var(--border); border-radius:6px; color: var(--text-0); cursor:pointer; text-align:left; }
 .status-menu-btn:hover { background: var(--bg-3); }
+
+/* --- Browser pinned slot + fetched card --- */
+.browser-pinned-slot { border:1px solid var(--border); border-radius: var(--r); padding:6px; background: var(--bg-2); max-height: 260px; overflow:auto; }
+.browser-pinned-slot > * { zoom: 0.85; }
+.browser-fetched-card { margin: 8px; padding:10px 12px; background: var(--bg-1); border:1px solid var(--accent); border-left-width:3px; border-radius: var(--r); box-shadow: var(--shadow); color: var(--text-1); }
+.browser-fetched-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.browser-fetched-title { flex:1; font-weight:600; color: var(--text-0); font-size: 13px; }
+.browser-fetched-body { font-size: 12px; color: var(--text-2); line-height:1.5; max-height: 120px; overflow:auto; white-space: pre-wrap; }
+.browser-fetched-actions { margin-top:8px; display:flex; align-items:center; }
+
+/* --- Browser pinned slot + fetched card --- */
+.browser-pinned-slot { border:1px solid var(--border); border-radius: var(--r); padding:6px; background: var(--bg-2); max-height: 260px; overflow:auto; }
+.browser-pinned-slot > * { zoom: 0.85; }
+.browser-fetched-card { margin: 8px; padding:10px 12px; background: var(--bg-1); border:1px solid var(--accent); border-left-width:3px; border-radius: var(--r); box-shadow: var(--shadow); color: var(--text-1); }
+.browser-fetched-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.browser-fetched-title { flex:1; font-weight:600; color: var(--text-0); font-size: 13px; }
+.browser-fetched-body { font-size: 12px; color: var(--text-2); line-height:1.5; max-height: 120px; overflow:auto; white-space: pre-wrap; }
+.browser-fetched-actions { margin-top:8px; display:flex; align-items:center; }

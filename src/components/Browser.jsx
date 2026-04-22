@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Plus, X, Star, BookOpen, Search as SearchIcon, Clock, Sparkles, Compass, Newspaper, Gauge } from 'lucide-react'
+import { Globe, ArrowLeft, ArrowRight, RotateCw, Home, Plus, X, Star, BookOpen, Search as SearchIcon, Clock, Sparkles, Compass, Newspaper, Gauge, LogOut, Pin, ExternalLink } from 'lucide-react'
 import { useToast } from './Toast'
 import { safeCall } from '../utils/logger'
+import FocusTimer from './FocusTimer'
+import Notebook from './Notebook'
+import ClipboardManager from './ClipboardManager'
+import Reminders from './Reminders'
 
 const HOME_URL = 'https://duckduckgo.com'
 
@@ -74,7 +78,7 @@ const READING_MODE_SCRIPT = `
 })()
 `
 
-export default function Browser() {
+export default function Browser({ onNavigate }) {
   const toast = useToast()
   const [tabs, setTabs] = useState([{ id: 't-1', url: HOME_URL, title: 'New Tab', favicon: '', loading: false }])
   const [activeId, setActiveId] = useState('t-1')
@@ -83,6 +87,8 @@ export default function Browser() {
   const [recentlyClosed, setRecentlyClosed] = useState([])
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
+  const [pinned, setPinned] = useState(() => { try { return localStorage.getItem('browser-pinned') || '' } catch { return '' } })
+  const [fetchedInfo, setFetchedInfo] = useState(null)
   const [splashVisible, setSplashVisible] = useState(() => {
     try { return sessionStorage.getItem('browser-splash-dismissed') !== '1' } catch { return true }
   })
@@ -100,6 +106,19 @@ export default function Browser() {
     if (!isElectron) return
     safeCall(() => window.api.bookmarks.list(), { where: 'bookmarks.list', toast, fallback: [] }).then(setBookmarks)
   }, [])
+
+  // Anything in the app (e.g. the AI agent) can push fetched content to the
+  // browser surface by dispatching a `browser:fetched` CustomEvent with
+  // { title, url, summary }. We show a dismissable card above the page.
+  useEffect(() => {
+    const h = (e) => { if (e?.detail) setFetchedInfo(e.detail) }
+    window.addEventListener('browser:fetched', h)
+    return () => window.removeEventListener('browser:fetched', h)
+  }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem('browser-pinned', pinned || '') } catch {}
+  }, [pinned])
 
   const active = tabs.find(t => t.id === activeId) || tabs[0]
 
@@ -280,6 +299,7 @@ export default function Browser() {
         <button className="btn btn-ghost btn-icon btn-sm" onClick={doReading} title="Reading Mode"><BookOpen size={13} /></button>
         <button className="btn btn-ghost btn-icon btn-sm" onClick={summarizeWithAI} title="Summarize with AI"><Sparkles size={13} /></button>
         <button className="btn btn-ghost btn-icon btn-sm" onClick={addBookmark} title="Bookmark"><Star size={13} /></button>
+        <button className="btn btn-ghost btn-icon btn-sm" onClick={() => onNavigate && onNavigate('welcome')} title="Exit browser"><LogOut size={13} /></button>
       </div>
 
       {findOpen && (
@@ -295,35 +315,79 @@ export default function Browser() {
       )}
 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <div style={{ width: 200, borderRight: '1px solid var(--border)', padding: 8, overflowY: 'auto', background: 'var(--bg-1)' }}>
-          <div className="text-xs text-muted mb-8" style={{ fontWeight: 600 }}>BOOKMARKS</div>
-          {bookmarks.length === 0 && <div className="text-xs text-muted">No bookmarks yet</div>}
-          {bookmarks.map(b => (
-            <div key={b.id} className="flex items-center justify-between" style={{ padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => navigate(b.url)}>{b.title}</span>
-              <button className="btn btn-ghost btn-icon" style={{ width: 16, height: 16, padding: 0 }} onClick={() => removeBookmark(b.id)}><X size={9} /></button>
+        <div style={{ width: 200, borderRight: '1px solid var(--border)', padding: 8, overflowY: 'auto', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <div className="text-xs text-muted mb-8" style={{ fontWeight: 600 }}>BOOKMARKS</div>
+            {bookmarks.length === 0 && <div className="text-xs text-muted">No bookmarks yet</div>}
+            {bookmarks.map(b => (
+              <div key={b.id} className="flex items-center justify-between" style={{ padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => navigate(b.url)}>{b.title}</span>
+                <button className="btn btn-ghost btn-icon" style={{ width: 16, height: 16, padding: 0 }} onClick={() => removeBookmark(b.id)}><X size={9} /></button>
+              </div>
+            ))}
+            {recentlyClosed.length > 0 && (
+              <>
+                <div className="text-xs text-muted mt-8 mb-8" style={{ fontWeight: 600 }}>RECENTLY CLOSED</div>
+                {recentlyClosed.slice(0, 5).map((r, i) => (
+                  <div key={i} className="flex items-center" style={{ padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+                    onClick={() => newTab(r.url)} title={r.url}>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+            <div className="flex items-center gap-4 mb-8">
+              <Pin size={10} />
+              <div className="text-xs text-muted" style={{ fontWeight: 600, flex: 1 }}>PINNED</div>
+              <select className="input" style={{ fontSize: 10, padding: '2px 4px' }} value={pinned} onChange={e => setPinned(e.target.value)}>
+                <option value="">none</option>
+                <option value="timer">timer</option>
+                <option value="notes">notes</option>
+                <option value="clipboard">clipboard</option>
+                <option value="reminders">reminders</option>
+              </select>
             </div>
-          ))}
-          {recentlyClosed.length > 0 && (
-            <>
-              <div className="text-xs text-muted mt-8 mb-8" style={{ fontWeight: 600 }}>RECENTLY CLOSED</div>
-              {recentlyClosed.slice(0, 5).map((r, i) => (
-                <div key={i} className="flex items-center" style={{ padding: '4px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
-                  onClick={() => newTab(r.url)} title={r.url}>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
-                </div>
-              ))}
-            </>
-          )}
+            {pinned && (
+              <div className="browser-pinned-slot">
+                {pinned === 'timer' && <FocusTimer compact />}
+                {pinned === 'notes' && <Notebook compact />}
+                {pinned === 'clipboard' && <ClipboardManager compact />}
+                {pinned === 'reminders' && <Reminders compact />}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{ flex: 1, background: '#fff' }}>
-          {isElectron
-            ? <webview ref={webviewRef} src={active.url} style={{ width: '100%', height: '100%', display: 'inline-flex' }} allowpopups="true" />
-            : <div className="text-muted text-sm" style={{ padding: 24 }}>Browser only works in the Electron app.</div>
-          }
+        <div style={{ flex: 1, background: '#fff', display: 'flex', flexDirection: 'column' }}>
+          {fetchedInfo && (
+            <div className="browser-fetched-card">
+              <div className="browser-fetched-head">
+                <Sparkles size={12} />
+                <span className="browser-fetched-title">{fetchedInfo.title || 'Fetched result'}</span>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setFetchedInfo(null)} title="Dismiss"><X size={11} /></button>
+              </div>
+              {fetchedInfo.summary && <div className="browser-fetched-body">{fetchedInfo.summary}</div>}
+              {fetchedInfo.url && (
+                <div className="browser-fetched-actions">
+                  <button className="btn btn-primary btn-sm" onClick={() => { navigate(fetchedInfo.url); setFetchedInfo(null) }}>
+                    <ExternalLink size={11} /> View in Browser
+                  </button>
+                  <span className="text-xs text-muted" style={{ marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis' }}>{fetchedInfo.url}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            {isElectron
+              ? <webview ref={webviewRef} src={active.url} style={{ width: '100%', height: '100%', display: 'inline-flex' }} allowpopups="true" />
+              : <div className="text-muted text-sm" style={{ padding: 24 }}>Browser only works in the Electron app.</div>
+            }
+          </div>
         </div>
       </div>
     </div>

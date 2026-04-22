@@ -2247,6 +2247,33 @@ app.whenReady().then(() => {
       } catch (e) { cb({ error: -6 }) }
     })
   } catch (e) { console.error('media protocol register failed', e) }
+
+  // Graceful handling of certificate errors and permissions for embedded
+  // webviews. Previously an expired/self-signed cert would pop a scary
+  // "suspicious content" interstitial; we now show a lightweight in-app toast
+  // instead and let the renderer decide how to recover.
+  try {
+    app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+      event.preventDefault()
+      // Reject by default — the renderer sees a did-fail-load event and can
+      // surface a friendly banner.
+      callback(false)
+      try { webContents.send('browser:cert-error', { url, error }) } catch {}
+    })
+    app.on('web-contents-created', (_event, contents) => {
+      if (contents.getType && contents.getType() === 'webview') {
+        contents.setWindowOpenHandler(({ url }) => {
+          electronShell.openExternal(url).catch(() => {})
+          return { action: 'deny' }
+        })
+      }
+    })
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+      // Deny sensitive permissions by default. Users can add exceptions later.
+      const allowed = ['clipboard-read', 'clipboard-sanitized-write', 'fullscreen']
+      callback(allowed.includes(permission))
+    })
+  } catch (e) { console.error('security handlers failed', e) }
 })
 app.on('window-all-closed', () => { globalShortcut.unregisterAll(); if (process.platform !== 'darwin') app.quit() })
 app.on('will-quit', () => {
