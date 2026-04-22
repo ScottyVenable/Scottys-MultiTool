@@ -1503,3 +1503,28 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .fwf-member-avatar[data-host="true"] { border:2px solid var(--accent); }
 .fwf-vote-dot { position:absolute; bottom:1px; right:1px; width:8px; height:8px; border-radius:50%; background:var(--yellow); border:2px solid var(--bg-1); }
 .fwf-controls { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+
+/* ===== Coins Shop ===== */
+.shop-panel { display:flex; flex-direction:column; height:100%; overflow:hidden; }
+.shop-header { padding:16px 20px 12px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:10px; }
+.shop-title-row { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; color:var(--text-0); }
+.shop-balance { margin-left:auto; display:flex; align-items:center; gap:5px; font-size:13px; font-weight:600; color:var(--yellow); background:color-mix(in srgb,var(--yellow) 10%,transparent); padding:4px 10px; border-radius:999px; }
+.shop-coin-icon { font-size:14px; }
+.shop-filters { display:flex; gap:6px; flex-wrap:wrap; }
+.shop-filter-btn { padding:4px 12px; border-radius:999px; border:1px solid var(--border); background:transparent; color:var(--text-1); font-size:12px; cursor:pointer; transition:background .13s, border-color .13s, color .13s; }
+.shop-filter-btn:hover { background:var(--bg-2); color:var(--text-0); }
+.shop-filter-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.shop-grid { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; padding:16px 20px; align-content:start; }
+.shop-card { display:flex; flex-direction:column; gap:8px; background:var(--bg-2); border:1px solid var(--border); border-radius:14px; padding:14px; transition:border-color .15s, box-shadow .15s; }
+.shop-card:hover { border-color:var(--accent); box-shadow:var(--shadow); }
+.shop-card.owned { opacity:.65; }
+.shop-card-icon { font-size:26px; }
+.shop-card-body { display:flex; flex-direction:column; gap:3px; flex:1; }
+.shop-card-category { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--text-3); }
+.shop-card-name { font-size:13px; font-weight:700; color:var(--text-0); }
+.shop-card-desc { font-size:11px; color:var(--text-2); line-height:1.4; }
+.shop-card-footer { margin-top:auto; }
+.shop-buy-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:8px; border:none; background:var(--accent); color:#fff; font-size:12px; font-weight:600; cursor:pointer; transition:opacity .15s; }
+.shop-buy-btn:hover:not(:disabled) { opacity:.85; }
+.shop-buy-btn.locked { background:var(--bg-3); color:var(--text-2); cursor:not-allowed; }
+.shop-owned-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--green); font-weight:600; }

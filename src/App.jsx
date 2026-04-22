@@ -4,7 +4,7 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2, Users, MessageSquare
+  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2, Users, MessageSquare, ShoppingBag
 } from 'lucide-react'
 import WelcomeScreen from './components/WelcomeScreen'
 import Dashboard from './components/Dashboard'
@@ -41,6 +41,7 @@ import { NotificationsProvider } from './components/NotificationsContext'
 import NotificationsCenter from './components/NotificationsCenter'
 import { CurrencyProvider } from './components/CurrencyContext'
 import CoinsPill from './components/CoinsPill'
+import CoinsShop from './components/CoinsShop'
 import FriendsPanel from './components/FriendsPanel'
 import MessagesCenter from './components/MessagesCenter'
 import FocusWithFriends from './components/FocusWithFriends'
@@ -81,6 +82,7 @@ const NAV = [
   { id: 'ai',            label: 'AI Workstation',  icon: Bot,             section: 'connect' },
   { id: 'mobile',        label: 'Mobile Remote',   icon: Smartphone,      section: 'connect' },
   { id: 'components',    label: 'Components',      icon: LayoutGrid,      section: 'config' },
+  { id: 'shop',          label: 'Rewards Shop',    icon: ShoppingBag,     section: 'config' },
   { id: 'settings',      label: 'Settings',        icon: Settings,        section: 'config' },
   { id: 'help',          label: 'Help',            icon: HelpCircle,      section: 'config' },
 ]
@@ -124,6 +126,7 @@ const PAGE_MAP = {
   ai: AIAssistant,
   mobile: MobileRemote,
   components: ComponentsPage,
+  shop: CoinsShop,
   settings: AppSettings,
   help: HelpDocs,
 }

@@ -44,7 +44,7 @@ async function save(state) {
 }
 
 export function CurrencyProvider({ children }) {
-  const [state, setState] = useState({ coins: 0, transactions: [], challenges: DEFAULT_CHALLENGES.map(c => ({ ...c, progress: 0 })), day: todayKey() })
+  const [state, setState] = useState({ coins: 0, transactions: [], challenges: DEFAULT_CHALLENGES.map(c => ({ ...c, progress: 0 })), day: todayKey(), purchases: [] })
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
@@ -99,7 +99,24 @@ export function CurrencyProvider({ children }) {
     return ok
   }, [])
 
-  const value = { ...state, award, spend }
+  const purchase = useCallback((itemId, label, cost) => {
+    let ok = false
+    setState(prev => {
+      if (prev.purchases?.includes(itemId)) return prev
+      if (prev.coins < cost) return prev
+      ok = true
+      const tx = { id: Date.now() + '-p-' + itemId, kind: 'spend', amount: -cost, label: label, ts: Date.now() }
+      return {
+        ...prev,
+        coins: prev.coins - cost,
+        transactions: [tx, ...prev.transactions].slice(0, MAX_TX),
+        purchases: [...(prev.purchases || []), itemId],
+      }
+    })
+    return ok
+  }, [])
+
+  const value = { ...state, award, spend, purchase }
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>
 }
 
