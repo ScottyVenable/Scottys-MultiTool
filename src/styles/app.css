@@ -1135,3 +1135,30 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-size: 11px; color: var(--text-2);
 }
 .browser-splash-enter { margin-top: 4px; align-self: flex-end; }
+
+/* ── Chore Calendar (month grid) ──────────────────────────────────────────── */
+.chore-cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.chore-cal-h {
+  text-align: center; font-size: 10px; font-weight: 700;
+  letter-spacing: .08em; color: var(--text-3); text-transform: uppercase;
+  padding: 4px 0;
+}
+.chore-cal-cell {
+  min-height: 72px; padding: 6px;
+  background: var(--bg-1); border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex; flex-direction: column; gap: 4px;
+  position: relative;
+}
+.chore-cal-pad { background: transparent; border-color: transparent; }
+.chore-cal-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.chore-cal-date { font-size: 11px; font-weight: 600; color: var(--text-1); }
+.chore-cal-dots { display: flex; flex-wrap: wrap; gap: 3px; }
+.chore-cal-dot { width: 8px; height: 8px; border-radius: 50%; }
+.chore-cal-more { font-size: 9px; color: var(--text-3); }
+.chore-cal-done {
+  position: absolute; bottom: 4px; right: 6px;
+  font-size: 9px; color: var(--green); font-weight: 700;
+}

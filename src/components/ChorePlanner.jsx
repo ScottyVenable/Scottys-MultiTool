@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Trophy, Plus, Check, Trash2, Sparkles, Star, Flame, X, User, Calendar, Award, Tag } from 'lucide-react'
+import { Trophy, Plus, Check, Trash2, Sparkles, Star, Flame, X, User, Calendar, Award, Tag, Users, Home as HomeIcon } from 'lucide-react'
 import { useToast } from './Toast'
 import { logError, safeCall } from '../utils/logger'
 
@@ -25,12 +25,12 @@ const catColor = (name) => (CATEGORIES.find(c => c.id === name)?.color) || '#647
 function xpForLevel(level) { return Math.pow(level, 2) * 50 }
 function levelForXp(xp) { return Math.floor(Math.sqrt(xp / 50)) }
 
-function ChoreModal({ chore, onSave, onClose }) {
+function ChoreModal({ chore, onSave, onClose, memberOptions }) {
   const [title, setTitle] = useState(chore?.title || '')
   const [description, setDescription] = useState(chore?.description || '')
   const [day, setDay] = useState(chore?.day || 'daily')
   const [difficulty, setDifficulty] = useState(chore?.difficulty || 1)
-  const [owner, setOwner] = useState(chore?.owner || 'me')
+  const [owner, setOwner] = useState(chore?.owner || (memberOptions?.[0]?.name) || 'me')
   const [category, setCategory] = useState(chore?.category || 'General')
   const [tagsText, setTagsText] = useState((chore?.tags || []).join(', '))
 
@@ -86,7 +86,15 @@ function ChoreModal({ chore, onSave, onClose }) {
           </div>
           <div className="form-group">
             <label className="form-label">Owner</label>
-            <input className="input" value={owner} onChange={e => setOwner(e.target.value)} placeholder="me" />
+            {memberOptions && memberOptions.length > 0 ? (
+              <select className="input" value={owner} onChange={e => setOwner(e.target.value)}>
+                {memberOptions.map(m => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input className="input" value={owner} onChange={e => setOwner(e.target.value)} placeholder="me" />
+            )}
           </div>
         </div>
         <div className="modal-footer">
@@ -108,9 +116,41 @@ export default function ChorePlanner() {
   const [achievementDefs, setAchievementDefs] = useState([])
   const [filterCat, setFilterCat] = useState('all')
   const [filterText, setFilterText] = useState('')
+  // Households: persisted via generic store under key 'choreHouseholds'. Shape:
+  //   [{ id, name, members: [{ id, name, color }] }]
+  // Also tracks `activeHouseholdId` for the selector.
+  const [households, setHouseholds] = useState([])
+  const [activeHouseholdId, setActiveHouseholdId] = useState(null)
+  // Calendar view state (month offset from current month; 0 = this month).
+  const [calOffset, setCalOffset] = useState(0)
   const isElectron = !!window.api
 
-  useEffect(() => { if (isElectron) refresh() }, [])
+  useEffect(() => {
+    if (isElectron) { refresh(); loadHouseholds() }
+  }, [])
+
+  const loadHouseholds = async () => {
+    const saved = await safeCall(() => window.api.store.get('choreHouseholds'), { where: 'store.get(choreHouseholds)', toast, fallback: null })
+    const list = Array.isArray(saved?.list) ? saved.list : (Array.isArray(saved) ? saved : [])
+    setHouseholds(list)
+    setActiveHouseholdId(saved?.activeId || list[0]?.id || null)
+  }
+
+  const saveHouseholds = async (nextList, nextActiveId) => {
+    const payload = { list: nextList, activeId: nextActiveId ?? activeHouseholdId }
+    await safeCall(() => window.api.store.set('choreHouseholds', payload), { where: 'store.set(choreHouseholds)', toast })
+    setHouseholds(nextList)
+    if (nextActiveId !== undefined) setActiveHouseholdId(nextActiveId)
+  }
+
+  const activeHousehold = households.find(h => h.id === activeHouseholdId) || null
+  const memberOptions = activeHousehold?.members && activeHousehold.members.length
+    ? activeHousehold.members
+    : [{ id: 'me', name: 'me', color: 'var(--accent)' }]
+  const memberColor = (ownerName) => {
+    const m = memberOptions.find(m => m.name === ownerName)
+    return m?.color || 'var(--text-3)'
+  }
 
   const refresh = async () => {
     const c = await safeCall(() => window.api.chores.list(), { where: 'chores.list', toast, fallback: [] })
@@ -260,8 +300,10 @@ export default function ChorePlanner() {
       <div className="tab-bar mb-16">
         <button className={`tab-item ${tab === 'today' ? 'tab-active' : ''}`} onClick={() => setTab('today')}><Calendar size={13} /> Today</button>
         <button className={`tab-item ${tab === 'week' ? 'tab-active' : ''}`} onClick={() => setTab('week')}><Calendar size={13} /> Week</button>
+        <button className={`tab-item ${tab === 'calendar' ? 'tab-active' : ''}`} onClick={() => setTab('calendar')}><Calendar size={13} /> Calendar</button>
         <button className={`tab-item ${tab === 'badges' ? 'tab-active' : ''}`} onClick={() => setTab('badges')}><Award size={13} /> Badges</button>
         <button className={`tab-item ${tab === 'board' ? 'tab-active' : ''}`} onClick={() => setTab('board')}><User size={13} /> Leaderboard</button>
+        <button className={`tab-item ${tab === 'household' ? 'tab-active' : ''}`} onClick={() => setTab('household')}><Users size={13} /> Household</button>
       </div>
 
       {tab !== 'badges' && (
@@ -385,7 +427,173 @@ export default function ChorePlanner() {
         </div>
       )}
 
-      {editing && <ChoreModal chore={editing} onSave={saveChore} onClose={() => setEditing(null)} />}
+      {tab === 'calendar' && (
+        <CalendarTab
+          chores={filteredChores}
+          offset={calOffset}
+          setOffset={setCalOffset}
+          memberColor={memberColor}
+        />
+      )}
+
+      {tab === 'household' && (
+        <HouseholdTab
+          households={households}
+          activeHouseholdId={activeHouseholdId}
+          onChange={(list, activeId) => saveHouseholds(list, activeId)}
+        />
+      )}
+
+      {editing && <ChoreModal chore={editing} memberOptions={memberOptions} onSave={saveChore} onClose={() => setEditing(null)} />}
+    </div>
+  )
+}
+
+// ── Calendar tab ─────────────────────────────────────────────────────────────
+function CalendarTab({ chores, offset, setOffset, memberColor }) {
+  const now = new Date()
+  const viewed = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const year = viewed.getFullYear()
+  const month = viewed.getMonth()
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const monthLabel = viewed.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const todayKey = new Date().toISOString().slice(0, 10)
+
+  // Determine which chores land on each date. `day` can be 'daily' or a weekday
+  // abbrev. We also surface `lastCompleted === ISO date` completion marks.
+  const cellsByDay = []
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d)
+    const iso = date.toISOString().slice(0, 10)
+    const dow = ['sun','mon','tue','wed','thu','fri','sat'][date.getDay()]
+    const scheduled = chores.filter(c => c.day === 'daily' || c.day === dow)
+    const completions = chores.filter(c => c.lastCompleted === iso)
+    cellsByDay.push({ d, iso, isToday: iso === todayKey, scheduled, completions })
+  }
+
+  const pad = Array.from({ length: firstDow }, (_, i) => ({ pad: true, key: `p-${i}` }))
+  const cells = [...pad, ...cellsByDay]
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      <div className="flex items-center justify-between mb-12">
+        <button className="btn btn-ghost btn-sm" onClick={() => setOffset(offset - 1)}>←</button>
+        <div style={{ fontWeight: 600 }}>{monthLabel}</div>
+        <div className="flex gap-6">
+          <button className="btn btn-ghost btn-sm" onClick={() => setOffset(0)}>Today</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setOffset(offset + 1)}>→</button>
+        </div>
+      </div>
+      <div className="chore-cal-grid">
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(lbl => (
+          <div key={lbl} className="chore-cal-h">{lbl}</div>
+        ))}
+        {cells.map((c, i) => c.pad ? (
+          <div key={c.key} className="chore-cal-cell chore-cal-pad" />
+        ) : (
+          <div key={c.iso} className={`chore-cal-cell ${c.isToday ? 'chore-cal-today' : ''}`}>
+            <div className="chore-cal-date">{c.d}</div>
+            <div className="chore-cal-dots">
+              {c.scheduled.slice(0, 6).map((ch, idx) => (
+                <span
+                  key={`s-${idx}-${ch.id}`}
+                  className="chore-cal-dot"
+                  title={`${ch.title} · ${ch.owner || 'me'}`}
+                  style={{ background: memberColor(ch.owner) }}
+                />
+              ))}
+              {c.scheduled.length > 6 && (
+                <span className="chore-cal-more">+{c.scheduled.length - 6}</span>
+              )}
+            </div>
+            {c.completions.length > 0 && (
+              <div className="chore-cal-done" title={`${c.completions.length} completed`}>
+                ✓ {c.completions.length}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Household tab ────────────────────────────────────────────────────────────
+function HouseholdTab({ households, activeHouseholdId, onChange }) {
+  const [newHouseName, setNewHouseName] = useState('')
+  const [newMemberName, setNewMemberName] = useState('')
+  const [newMemberColor, setNewMemberColor] = useState('#ff6b35')
+  const active = households.find(h => h.id === activeHouseholdId)
+
+  const addHousehold = () => {
+    if (!newHouseName.trim()) return
+    const id = `h_${Date.now().toString(36)}`
+    const h = { id, name: newHouseName.trim(), members: [] }
+    onChange([...households, h], id)
+    setNewHouseName('')
+  }
+  const removeHousehold = (id) => {
+    if (!confirm('Delete this household and all of its members?')) return
+    const next = households.filter(h => h.id !== id)
+    onChange(next, next[0]?.id || null)
+  }
+  const addMember = () => {
+    if (!active || !newMemberName.trim()) return
+    const m = { id: `m_${Date.now().toString(36)}`, name: newMemberName.trim(), color: newMemberColor }
+    const next = households.map(h => h.id === active.id ? { ...h, members: [...(h.members || []), m] } : h)
+    onChange(next)
+    setNewMemberName('')
+  }
+  const removeMember = (mid) => {
+    if (!active) return
+    const next = households.map(h => h.id === active.id ? { ...h, members: h.members.filter(m => m.id !== mid) } : h)
+    onChange(next)
+  }
+
+  return (
+    <div className="grid-2 gap-12">
+      <div className="card" style={{ padding: 14 }}>
+        <div className="card-title mb-10"><HomeIcon size={14} className="card-title-icon" /> Households</div>
+        {households.length === 0 && <div className="text-sm text-muted mb-8">No households yet. Add one below to start tracking who does what.</div>}
+        {households.map(h => (
+          <div key={h.id} className="flex items-center justify-between" style={{ padding: '6px 8px', borderRadius: 4, background: h.id === activeHouseholdId ? 'var(--bg-3)' : 'transparent', cursor: 'pointer' }} onClick={() => onChange(households, h.id)}>
+            <div style={{ fontWeight: 500 }}>{h.name}</div>
+            <div className="flex gap-6 items-center">
+              <span className="text-xs text-muted">{h.members?.length || 0} members</span>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={(e) => { e.stopPropagation(); removeHousehold(h.id) }}><Trash2 size={11} /></button>
+            </div>
+          </div>
+        ))}
+        <div className="flex gap-6 mt-12">
+          <input className="input" value={newHouseName} placeholder="Household name (e.g. Smith family)" onChange={e => setNewHouseName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHousehold()} />
+          <button className="btn btn-primary btn-sm" onClick={addHousehold}><Plus size={12} /> Add</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 14 }}>
+        <div className="card-title mb-10"><Users size={14} className="card-title-icon" /> Members {active && <span className="text-xs text-muted" style={{ fontWeight: 400 }}>· {active.name}</span>}</div>
+        {!active && <div className="text-sm text-muted">Select a household to manage its members.</div>}
+        {active && (
+          <>
+            {(active.members || []).length === 0 && <div className="text-sm text-muted mb-8">No members yet. Add the first one below.</div>}
+            {(active.members || []).map(m => (
+              <div key={m.id} className="flex items-center justify-between" style={{ padding: '6px 8px' }}>
+                <div className="flex items-center gap-8">
+                  <span style={{ width: 12, height: 12, borderRadius: '50%', background: m.color, display: 'inline-block' }} />
+                  <span style={{ fontWeight: 500 }}>{m.name}</span>
+                </div>
+                <button className="btn btn-ghost btn-icon btn-sm" onClick={() => removeMember(m.id)}><Trash2 size={11} /></button>
+              </div>
+            ))}
+            <div className="flex gap-6 mt-12" style={{ alignItems: 'center' }}>
+              <input className="input" value={newMemberName} placeholder="Name" onChange={e => setNewMemberName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addMember()} />
+              <input type="color" value={newMemberColor} onChange={e => setNewMemberColor(e.target.value)} style={{ width: 36, height: 32, padding: 0, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent' }} />
+              <button className="btn btn-primary btn-sm" onClick={addMember}><Plus size={12} /> Add</button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
