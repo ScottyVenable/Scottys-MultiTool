@@ -122,6 +122,9 @@ contextBridge.exposeInMainWorld('api', {
     write: (text) => ipcRenderer.invoke('shell:write', text),
     kill: () => ipcRenderer.invoke('shell:kill'),
   },
+  cli: {
+    open: () => ipcRenderer.invoke('cli:open'),
+  },
   aiSettings: {
     get: () => ipcRenderer.invoke('aiSettings:get'),
     set: (val) => ipcRenderer.invoke('aiSettings:set', val),

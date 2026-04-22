@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Bot, Send, Settings, Loader, Trash2, Terminal, Cpu, Play, Square, Eye, Camera, CheckCircle, XCircle, Database, Sliders, Save, Plus, X, Paperclip, Mic, MicOff, AlertTriangle, RefreshCw, Clock, Zap, ScrollText } from 'lucide-react'
+import { Bot, Send, Settings, Loader, Trash2, Terminal, Cpu, Play, Square, Eye, Camera, CheckCircle, XCircle, Database, Sliders, Save, Plus, X, Paperclip, Mic, MicOff, AlertTriangle, RefreshCw, Clock, Zap, ScrollText, ExternalLink } from 'lucide-react'
 import { MarkdownRenderer } from '../utils/markdown'
 import { useToast } from './Toast'
 import { useAIAttachments } from '../utils/aiAttachment'
@@ -146,7 +146,7 @@ function ChatTab({ aiConfig }) {
   )
 }
 
-function AgentCLITab() {
+function AgentCLITab({ standalone = false }) {
   const [output, setOutput] = useState('')
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
@@ -169,6 +169,7 @@ function AgentCLITab() {
     await window.api.shell.write(input); setInput('')
   }
   const kill = async () => { if (!isElectron) return; await window.api.shell.kill(); setRunning(false) }
+  const popOut = async () => { if (isElectron && window.api.cli?.open) await window.api.cli.open() }
 
   return (
     <div className="flex-col gap-12" style={{ flex: 1, minHeight: 0 }}>
@@ -177,9 +178,14 @@ function AgentCLITab() {
           ? <button className="btn btn-success" onClick={spawn}><Play size={14} /> Start PowerShell</button>
           : <button className="btn btn-danger" onClick={kill}><Square size={14} /> Kill</button>
         }
+        {!standalone && (
+          <button className="btn btn-secondary" onClick={popOut} title="Open in a dedicated window">
+            <ExternalLink size={14} /> Pop out
+          </button>
+        )}
         <span className="text-xs text-muted">Persistent PowerShell session. Type commands below.</span>
       </div>
-      <div ref={outputRef} className="terminal-output" style={{ flex: 1, minHeight: 300, maxHeight: '60vh' }}>
+      <div ref={outputRef} className="terminal-output" style={{ flex: 1, minHeight: standalone ? 0 : 300, maxHeight: standalone ? 'none' : '60vh' }}>
         {output || (running ? 'Session started.\n' : 'Start a session to begin.')}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -189,6 +195,30 @@ function AgentCLITab() {
           placeholder="Enter command..." style={{ fontSize: 13 }} />
         <button className="btn btn-primary" onClick={sendCmd} disabled={!running || !input.trim()}><Send size={14} /></button>
       </div>
+    </div>
+  )
+}
+
+// Exported standalone shell wrapper used when the app is loaded with the
+// `#cli` route hash (the detached CLI window loads index.html#cli).
+export function StandaloneCLI() {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-0)', color: 'var(--text-0)',
+      padding: '12px 16px 16px', paddingTop: 44, // room for the drag-region titlebar
+      WebkitAppRegion: 'no-drag',
+    }}>
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 36,
+        WebkitAppRegion: 'drag',
+        display: 'flex', alignItems: 'center', padding: '0 12px',
+        fontSize: 12, color: 'var(--text-2)', letterSpacing: '.08em', textTransform: 'uppercase',
+      }}>
+        Multitool · CLI
+      </div>
+      <AgentCLITab standalone />
     </div>
   )
 }

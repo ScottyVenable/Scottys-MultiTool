@@ -1567,16 +1567,45 @@ ipcMain.handle('fs:search', async (_, dir, query) => {
 
 // ─── Shell (Agent CLI) IPC ────────────────────────────────────────────────────
 let shellProcess = null
+// Broadcast shell stdout/stderr/exit to the main window AND any detached CLI windows.
+function broadcastShell(channel, payload) {
+  try { mainWindow?.webContents.send(channel, payload) } catch {}
+  for (const w of cliWindows) {
+    try { if (w && !w.isDestroyed()) w.webContents.send(channel, payload) } catch {}
+  }
+}
 ipcMain.handle('shell:spawn', () => {
   if (shellProcess) { try { shellProcess.kill() } catch {} }
   shellProcess = spawn('powershell.exe', ['-NoLogo', '-NoExit', '-Command', '-'], { stdio: ['pipe','pipe','pipe'] })
-  shellProcess.stdout.on('data', d => mainWindow?.webContents.send('shell:data', d.toString()))
-  shellProcess.stderr.on('data', d => mainWindow?.webContents.send('shell:data', d.toString()))
-  shellProcess.on('close', () => { shellProcess = null; mainWindow?.webContents.send('shell:closed') })
+  shellProcess.stdout.on('data', d => broadcastShell('shell:data', d.toString()))
+  shellProcess.stderr.on('data', d => broadcastShell('shell:data', d.toString()))
+  shellProcess.on('close', () => { shellProcess = null; broadcastShell('shell:closed') })
   return true
 })
 ipcMain.handle('shell:write', (_, text) => { if (shellProcess) { shellProcess.stdin.write(text + '\n') } return true })
 ipcMain.handle('shell:kill', () => { if (shellProcess) { try { shellProcess.kill() } catch {}; shellProcess = null } return true })
+
+// ─── Detachable CLI Window ────────────────────────────────────────────────────
+const cliWindows = new Set()
+ipcMain.handle('cli:open', () => {
+  const win = new BrowserWindow({
+    width: 900, height: 620, minWidth: 560, minHeight: 360,
+    frame: false, titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#0d0d0d', symbolColor: '#f5f5f5', height: 36 },
+    backgroundColor: '#0d0d0d',
+    title: 'Multitool · CLI',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  const target = isDev ? 'http://localhost:5173/#cli' : `file://${path.join(__dirname, '../dist/index.html')}#cli`
+  win.loadURL(target)
+  cliWindows.add(win)
+  win.on('closed', () => { cliWindows.delete(win) })
+  return true
+})
 
 // ─── Screen Capture (Computer Use Agent) ──────────────────────────────────────
 ipcMain.handle('screen:sources', async () => {
