@@ -6,6 +6,7 @@ const { exec, spawn } = require('child_process')
 const http = require('http')
 const express = require('express')
 const { WebSocketServer } = require('ws')
+const authLib = require('./auth')
 
 const isDev = process.argv.includes('--dev')
 
@@ -23,6 +24,9 @@ function saveStore(data) {
   try { fs.writeFileSync(storePath, JSON.stringify(data, null, 2)) } catch (e) { console.error('Store save error:', e) }
 }
 let store = loadStore()
+// One-time migration: move pre-auth data into a default user bucket.
+authLib.ensureShape(store)
+authLib.migrateIfNeeded(store, saveStore)
 
 // ─── Key Simulation ───────────────────────────────────────────────────────────
 function convertToSendKeys(combo) {
@@ -498,8 +502,43 @@ function stopMobileServer() {
   if (mobileServer) { mobileServer.close(); mobileServer = null; wss = null }
 }
 
-// ─── Main Window ──────────────────────────────────────────────────────────────
+// ─── Main Window & Splash ────────────────────────────────────────────────────
 let mainWindow
+let splashWindow
+
+function createSplash() {
+  try {
+    splashWindow = new BrowserWindow({
+      width: 420, height: 520, frame: false, transparent: true,
+      resizable: false, movable: true, alwaysOnTop: true, show: false,
+      skipTaskbar: true, backgroundColor: '#00000000',
+      webPreferences: {
+        preload: path.join(__dirname, 'splash-preload.js'),
+        contextIsolation: true, nodeIntegration: false,
+      },
+    })
+    splashWindow.loadFile(path.join(__dirname, 'splash.html'))
+    splashWindow.once('ready-to-show', () => { try { splashWindow.show() } catch {} })
+    splashWindow.on('closed', () => { splashWindow = null })
+  } catch (e) { splashWindow = null }
+}
+
+function splashProgress(step, percent, label) {
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:progress', { step, percent, label })
+    }
+  } catch {}
+}
+
+function closeSplash() {
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:done')
+      setTimeout(() => { try { splashWindow && !splashWindow.isDestroyed() && splashWindow.close() } catch {} }, 450)
+    }
+  } catch {}
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -508,6 +547,7 @@ function createWindow() {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#0d0d0d', symbolColor: '#f5f5f5', height: 40 },
     backgroundColor: '#0d0d0d',
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -519,23 +559,235 @@ function createWindow() {
   else mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   mainWindow.on('closed', () => { mainWindow = null })
 
+  splashProgress(1, 20, 'Loading store…')
   loadAdBlockList()
   installAdBlocker()
+  splashProgress(2, 40, 'Starting background services…')
   startClipboardWatcher()
+  splashProgress(3, 55, 'Registering hotkeys…')
   registerAllHotkeys()
+  splashProgress(4, 70, 'Scheduling tasks…')
   startScheduler()
   startReminderPoller()
   if (store.settings?.mobileEnabled) startMobileServer(store.settings?.mobilePort || 8765)
   if (store.settings?.textExpanderEnabled) startTextExpander()
+  splashProgress(5, 90, 'Warming UI…')
 
   setInterval(() => { if (mainWindow) mainWindow.webContents.send('system:update', getSystemInfo()) }, 2000)
+
+  const reveal = () => {
+    try {
+      if (!mainWindow || mainWindow.isDestroyed()) return
+      if (!mainWindow.isVisible()) mainWindow.show()
+      splashProgress(6, 100, 'Ready.')
+      closeSplash()
+    } catch {}
+  }
+  // Don't block on ready-to-show forever.
+  mainWindow.once('ready-to-show', reveal)
+  setTimeout(reveal, 4000)
 }
 
 // ─── IPC Handlers ─────────────────────────────────────────────────────────────
 ipcMain.handle('store:get', (_, key) => key ? store[key] : store)
 ipcMain.handle('store:set', (_, key, value) => { store[key] = value; saveStore(store); return true })
 
+// ─── Auth / Accounts ──────────────────────────────────────────────────────────
+function currentUserRecord() {
+  authLib.ensureShape(store)
+  const id = store.session?.activeUserId
+  if (!id) return null
+  return store.accounts.find(u => u.id === id) || null
+}
+
+function emitAuthChange() {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('auth:changed', authLib.redactUser(currentUserRecord()))
+    }
+  } catch {}
+}
+
+ipcMain.handle('auth:listUsers', () => {
+  authLib.ensureShape(store)
+  return store.accounts.map(u => ({
+    id: u.id, username: u.username, displayName: u.displayName,
+    avatarDataUrl: u.avatarDataUrl || '', hasPassword: !!u.passwordHash,
+    lastLoginAt: u.lastLoginAt || null,
+  }))
+})
+
+ipcMain.handle('auth:currentUser', () => {
+  authLib.ensureShape(store)
+  if (!authLib.isSessionValid(store)) return null
+  return authLib.redactUser(currentUserRecord())
+})
+
+ipcMain.handle('auth:register', (_, payload) => {
+  authLib.ensureShape(store)
+  const { username, password, displayName, email } = payload || {}
+  const uerr = authLib.validateUsername(username); if (uerr) return { success: false, error: uerr }
+  const perr = authLib.validatePassword(password); if (perr) return { success: false, error: perr }
+  const norm = authLib.normaliseUsername(username)
+  if (store.accounts.some(u => authLib.normaliseUsername(u.username) === norm)) {
+    return { success: false, error: 'That username is already taken.' }
+  }
+  const { salt, hash } = authLib.hashPassword(password)
+  const recovery = authLib.generateRecoveryCode()
+  const recoveryMix = authLib.hashPassword(recovery)
+  const id = authLib.generateId()
+  const user = {
+    id, username: username.trim(), displayName: (displayName || '').trim() || username.trim(),
+    avatarDataUrl: '', email: (email || '').trim(), bio: '', bannerColor: '#6366f1',
+    passwordHash: hash, salt,
+    recoveryCodeHash: recoveryMix.hash, recoveryCodeSalt: recoveryMix.salt,
+    createdAt: new Date().toISOString(), lastLoginAt: null,
+    preferences: { theme: 'dark', accentColor: '#6366f1', defaultPage: 'dashboard', sidebarDensity: 'comfortable', soundsOn: true },
+  }
+  store.accounts.push(user)
+  store.userData[id] = store.userData[id] || {}
+  saveStore(store)
+  return { success: true, user: authLib.redactUser(user), recoveryCode: recovery }
+})
+
+ipcMain.handle('auth:login', (_, payload) => {
+  authLib.ensureShape(store)
+  const { username, password, rememberMe } = payload || {}
+  const locked = authLib.isLockedOut(username)
+  if (locked.locked) return { success: false, error: `Too many attempts. Try again in ${Math.ceil(locked.retryMs / 1000)}s.` }
+  const norm = authLib.normaliseUsername(username)
+  const user = store.accounts.find(u => authLib.normaliseUsername(u.username) === norm)
+  if (!user) { authLib.recordFailure(username); return { success: false, error: 'Invalid username or password.' } }
+  // Migrated (password-less) accounts: allow login with empty password and set one on first change.
+  const ok = user.passwordHash ? authLib.verifyPassword(password || '', user) : (password === '' || password == null)
+  if (!ok) { authLib.recordFailure(username); return { success: false, error: 'Invalid username or password.' } }
+  authLib.clearFailures(username)
+  user.lastLoginAt = new Date().toISOString()
+  store.session = {
+    activeUserId: user.id,
+    rememberMe: !!rememberMe,
+    expiresAt: rememberMe ? Date.now() + authLib.SESSION_TTL_MS : 0,
+    sessionToken: authLib.generateSessionToken(),
+  }
+  saveStore(store)
+  emitAuthChange()
+  return { success: true, user: authLib.redactUser(user) }
+})
+
+ipcMain.handle('auth:logout', () => {
+  authLib.ensureShape(store)
+  store.session = { activeUserId: null, rememberMe: false, expiresAt: 0, sessionToken: null }
+  saveStore(store)
+  emitAuthChange()
+  return { success: true }
+})
+
+ipcMain.handle('auth:updateProfile', (_, patch) => {
+  authLib.ensureShape(store)
+  const user = currentUserRecord()
+  if (!user) return { success: false, error: 'Not signed in.' }
+  const allowed = ['displayName', 'avatarDataUrl', 'email', 'bio', 'bannerColor', 'preferences']
+  for (const k of allowed) {
+    if (patch && Object.prototype.hasOwnProperty.call(patch, k)) {
+      if (k === 'preferences') user.preferences = { ...(user.preferences || {}), ...(patch.preferences || {}) }
+      else user[k] = patch[k]
+    }
+  }
+  // Username: unique, validated
+  if (patch && typeof patch.username === 'string' && authLib.normaliseUsername(patch.username) !== authLib.normaliseUsername(user.username)) {
+    const uerr = authLib.validateUsername(patch.username); if (uerr) return { success: false, error: uerr }
+    const norm = authLib.normaliseUsername(patch.username)
+    if (store.accounts.some(u => u.id !== user.id && authLib.normaliseUsername(u.username) === norm)) {
+      return { success: false, error: 'That username is already taken.' }
+    }
+    user.username = patch.username.trim()
+  }
+  saveStore(store)
+  emitAuthChange()
+  return { success: true, user: authLib.redactUser(user) }
+})
+
+ipcMain.handle('auth:changePassword', (_, payload) => {
+  authLib.ensureShape(store)
+  const user = currentUserRecord()
+  if (!user) return { success: false, error: 'Not signed in.' }
+  const { oldPassword, newPassword } = payload || {}
+  // Migrated accounts without existing password may set one without verifying old.
+  if (user.passwordHash) {
+    if (!authLib.verifyPassword(oldPassword || '', user)) return { success: false, error: 'Current password is incorrect.' }
+  }
+  const perr = authLib.validatePassword(newPassword); if (perr) return { success: false, error: perr }
+  const { salt, hash } = authLib.hashPassword(newPassword)
+  user.salt = salt; user.passwordHash = hash
+  saveStore(store)
+  return { success: true }
+})
+
+ipcMain.handle('auth:deleteAccount', (_, payload) => {
+  authLib.ensureShape(store)
+  const user = currentUserRecord()
+  if (!user) return { success: false, error: 'Not signed in.' }
+  if (user.passwordHash && !authLib.verifyPassword(payload?.password || '', user)) {
+    return { success: false, error: 'Password is incorrect.' }
+  }
+  store.accounts = store.accounts.filter(u => u.id !== user.id)
+  if (store.userData) delete store.userData[user.id]
+  store.session = { activeUserId: null, rememberMe: false, expiresAt: 0, sessionToken: null }
+  saveStore(store)
+  emitAuthChange()
+  return { success: true }
+})
+
+ipcMain.handle('auth:recoveryLogin', (_, payload) => {
+  authLib.ensureShape(store)
+  const { username, recoveryCode, newPassword } = payload || {}
+  const norm = authLib.normaliseUsername(username)
+  const user = store.accounts.find(u => authLib.normaliseUsername(u.username) === norm)
+  if (!user || !user.recoveryCodeHash) return { success: false, error: 'Invalid recovery code.' }
+  const { hash } = authLib.hashPassword(recoveryCode || '', user.recoveryCodeSalt)
+  const a = Buffer.from(hash, 'hex'); const b = Buffer.from(user.recoveryCodeHash, 'hex')
+  const ok = a.length === b.length && require('crypto').timingSafeEqual(a, b)
+  if (!ok) return { success: false, error: 'Invalid recovery code.' }
+  const perr = authLib.validatePassword(newPassword); if (perr) return { success: false, error: perr }
+  const p = authLib.hashPassword(newPassword)
+  user.salt = p.salt; user.passwordHash = p.hash
+  // Burn the used recovery code and issue a fresh one
+  const newRecovery = authLib.generateRecoveryCode()
+  const rm = authLib.hashPassword(newRecovery)
+  user.recoveryCodeHash = rm.hash; user.recoveryCodeSalt = rm.salt
+  saveStore(store)
+  return { success: true, recoveryCode: newRecovery }
+})
+
+// ─── Per-user data access helpers ─────────────────────────────────────────────
+// Private slices are stored under store.userData[activeUserId]. Reads fall back
+// to top-level values for backwards compatibility during migration.
+function getUserBucket() {
+  authLib.ensureShape(store)
+  const id = store.session?.activeUserId
+  if (!id) return null
+  if (!store.userData[id]) store.userData[id] = {}
+  return store.userData[id]
+}
+
+// Route a list of keys to the per-user bucket, mutating store.userData.
+function pbGet(key, fallback) {
+  const b = getUserBucket()
+  if (b && b[key] !== undefined) return b[key]
+  // backwards-compat: old top-level data
+  return store[key] !== undefined ? store[key] : fallback
+}
+function pbSet(key, value) {
+  const b = getUserBucket()
+  if (b) { b[key] = value } else { store[key] = value }
+  saveStore(store)
+}
+
+// Signal a session event on startup so the renderer knows if a remembered user is active
+app.on('browser-window-created', () => { setTimeout(emitAuthChange, 500) })
+
 ipcMain.handle('macro:run', (_, id) => executeMacro(id))
+
 ipcMain.handle('macro:stop', (_, id) => { delete runningMacros[id]; return true })
 ipcMain.handle('macro:save', (_, macro) => {
   const idx = store.macros.findIndex(m => m.id === macro.id)
@@ -601,14 +853,15 @@ ipcMain.handle('scheduler:save', (_, task) => {
 })
 ipcMain.handle('scheduler:delete', (_, id) => { store.scheduledTasks = (store.scheduledTasks||[]).filter(t => t.id !== id); saveStore(store); return true })
 
-ipcMain.handle('notes:list', () => store.notes || [])
+ipcMain.handle('notes:list', () => pbGet('notes', []))
 ipcMain.handle('notes:save', (_, note) => {
-  if (!store.notes) store.notes = []
-  const idx = store.notes.findIndex(n => n.id === note.id)
-  if (idx >= 0) store.notes[idx] = note; else store.notes.push(note)
-  saveStore(store); return note
+  let list = pbGet('notes', [])
+  const idx = list.findIndex(n => n.id === note.id)
+  if (idx >= 0) list[idx] = note; else list = [...list, note]
+  pbSet('notes', list)
+  return note
 })
-ipcMain.handle('notes:delete', (_, id) => { store.notes = (store.notes||[]).filter(n => n.id !== id); saveStore(store); return true })
+ipcMain.handle('notes:delete', (_, id) => { pbSet('notes', (pbGet('notes', [])).filter(n => n.id !== id)); return true })
 
 // Shared WASAPI Add-Type definitions (compiled once per PS session — we inject inline)
 const WASAPI_TYPES = `
@@ -838,31 +1091,32 @@ $g.Dispose(); $bmp.Dispose()
 ipcMain.handle('mouse:pos', () => screen.getCursorScreenPoint())
 
 // ─── Journal IPC ─────────────────────────────────────────────────────────────
-ipcMain.handle('journal:list', () => store.journal || [])
+ipcMain.handle('journal:list', () => pbGet('journal', []))
 ipcMain.handle('journal:save', (_, entry) => {
-  if (!store.journal) store.journal = []
-  const idx = store.journal.findIndex(e => e.id === entry.id)
-  if (idx >= 0) store.journal[idx] = entry; else store.journal.push(entry)
-  saveStore(store); return entry
+  let list = pbGet('journal', [])
+  const idx = list.findIndex(e => e.id === entry.id)
+  if (idx >= 0) list[idx] = entry; else list = [...list, entry]
+  pbSet('journal', list); return entry
 })
-ipcMain.handle('journal:delete', (_, id) => { store.journal = (store.journal||[]).filter(e => e.id !== id); saveStore(store); return true })
+ipcMain.handle('journal:delete', (_, id) => { pbSet('journal', (pbGet('journal', [])).filter(e => e.id !== id)); return true })
 ipcMain.handle('journal:search', (_, query) => {
   const q = (query||'').toLowerCase()
-  return (store.journal||[]).filter(e => (e.content||'').toLowerCase().includes(q) || (e.tags||[]).some(t => t.toLowerCase().includes(q))).slice(-5)
+  return (pbGet('journal', [])).filter(e => (e.content||'').toLowerCase().includes(q) || (e.tags||[]).some(t => t.toLowerCase().includes(q))).slice(-5)
 })
 
 // ─── Reminders IPC ───────────────────────────────────────────────────────────
-ipcMain.handle('reminders:list', () => store.reminders || [])
+ipcMain.handle('reminders:list', () => pbGet('reminders', []))
 ipcMain.handle('reminders:save', (_, reminder) => {
-  if (!store.reminders) store.reminders = []
-  const idx = store.reminders.findIndex(r => r.id === reminder.id)
-  if (idx >= 0) store.reminders[idx] = reminder; else store.reminders.push(reminder)
-  saveStore(store); return reminder
+  let list = pbGet('reminders', [])
+  const idx = list.findIndex(r => r.id === reminder.id)
+  if (idx >= 0) list[idx] = reminder; else list = [...list, reminder]
+  pbSet('reminders', list); return reminder
 })
-ipcMain.handle('reminders:delete', (_, id) => { store.reminders = (store.reminders||[]).filter(r => r.id !== id); saveStore(store); return true })
+ipcMain.handle('reminders:delete', (_, id) => { pbSet('reminders', (pbGet('reminders', [])).filter(r => r.id !== id)); return true })
 ipcMain.handle('reminders:dismiss', (_, id) => {
-  const r = (store.reminders||[]).find(r => r.id === id)
-  if (r) { r.dismissed = true; saveStore(store) }
+  const list = pbGet('reminders', [])
+  const r = list.find(r => r.id === id)
+  if (r) { r.dismissed = true; pbSet('reminders', list) }
   return true
 })
 
@@ -996,11 +1250,30 @@ ipcMain.handle('screen:sources', async () => {
   return sources.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL() }))
 })
 
-ipcMain.handle('screen:capture', async (_, sourceId) => {
-  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1280, height: 800 } })
+ipcMain.handle('screen:capture', async (_, sourceIdOrOpts, maybeOpts) => {
+  // Back-compat: first arg can be sourceId (string) or an opts object.
+  let sourceId = null; let opts = {}
+  if (typeof sourceIdOrOpts === 'string') { sourceId = sourceIdOrOpts; opts = maybeOpts || {} }
+  else if (sourceIdOrOpts && typeof sourceIdOrOpts === 'object') { opts = sourceIdOrOpts; sourceId = opts.sourceId || null }
+  const maxDim = Math.max(320, Math.min(2560, parseInt(opts.maxDim) || 1280))
+  const asJpeg = opts.format === 'jpeg'
+  const quality = Math.max(30, Math.min(100, parseInt(opts.quality) || 75))
+  const thumbH = Math.round(maxDim * (opts.aspect === 'wide' ? 0.5625 : 0.625)) // roughly 16:10
+  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: maxDim, height: thumbH } })
   const src = sourceId ? sources.find(s => s.id === sourceId) : sources[0]
   if (!src) return { success: false, error: 'No screen source found' }
-  return { success: true, dataUrl: src.thumbnail.toDataURL(), width: src.thumbnail.getSize().width, height: src.thumbnail.getSize().height }
+  const size = src.thumbnail.getSize()
+  try {
+    const dataUrl = asJpeg ? src.thumbnail.toJPEG(quality).toString('base64') : null
+    return {
+      success: true,
+      dataUrl: asJpeg ? `data:image/jpeg;base64,${dataUrl}` : src.thumbnail.toDataURL(),
+      width: size.width, height: size.height,
+      format: asJpeg ? 'jpeg' : 'png',
+    }
+  } catch {
+    return { success: true, dataUrl: src.thumbnail.toDataURL(), width: size.width, height: size.height, format: 'png' }
+  }
 })
 
 // ─── Action Execute (Computer Use Agent) ──────────────────────────────────────
@@ -1083,9 +1356,10 @@ Start-Sleep -Milliseconds 50
 const mediaDir = path.join(userData, 'media')
 try { if (!fs.existsSync(mediaDir)) fs.mkdirSync(mediaDir, { recursive: true }) } catch {}
 
-ipcMain.handle('media:list', () => store.mediaLibrary || [])
+ipcMain.handle('media:list', () => pbGet('mediaLibrary', []))
 ipcMain.handle('media:import', async (_, filePaths) => {
   const imported = []
+  let lib = pbGet('mediaLibrary', [])
   for (const src of filePaths || []) {
     try {
       const filename = path.basename(src)
@@ -1098,27 +1372,26 @@ ipcMain.handle('media:import', async (_, filePaths) => {
                  : ['.mp4','.webm','.mov','.mkv','.avi'].includes(ext) ? 'video'
                  : ['.mp3','.wav','.ogg','.flac','.m4a'].includes(ext) ? 'audio' : 'other'
       const entry = { id, filename, relPath: dest, type, tags: [], notes: '', size: stat.size, addedAt: new Date().toISOString() }
-      store.mediaLibrary = [...(store.mediaLibrary || []), entry]
+      lib = [...lib, entry]
       imported.push(entry)
     } catch (e) { /* skip bad file */ }
   }
-  saveStore(store)
+  pbSet('mediaLibrary', lib)
   return imported
 })
 ipcMain.handle('media:delete', async (_, id) => {
-  const item = (store.mediaLibrary || []).find(m => m.id === id)
+  const lib = pbGet('mediaLibrary', [])
+  const item = lib.find(m => m.id === id)
   if (item) { try { await fs.promises.unlink(item.relPath) } catch {} }
-  store.mediaLibrary = (store.mediaLibrary || []).filter(m => m.id !== id)
-  saveStore(store)
+  pbSet('mediaLibrary', lib.filter(m => m.id !== id))
   return true
 })
 ipcMain.handle('media:update', (_, id, patch) => {
-  store.mediaLibrary = (store.mediaLibrary || []).map(m => m.id === id ? { ...m, ...patch } : m)
-  saveStore(store)
+  pbSet('mediaLibrary', (pbGet('mediaLibrary', [])).map(m => m.id === id ? { ...m, ...patch } : m))
   return true
 })
 ipcMain.handle('media:open', (_, id) => {
-  const item = (store.mediaLibrary || []).find(m => m.id === id)
+  const item = (pbGet('mediaLibrary', [])).find(m => m.id === id)
   if (item) electronShell.openPath(item.relPath)
   return true
 })
@@ -1131,18 +1404,16 @@ ipcMain.handle('media:pick', async () => {
 })
 
 // ─── Bookmarks / Browser ──────────────────────────────────────────────────────
-ipcMain.handle('bookmarks:list', () => store.bookmarks || [])
+ipcMain.handle('bookmarks:list', () => pbGet('bookmarks', []))
 ipcMain.handle('bookmarks:save', (_, bm) => {
-  const list = store.bookmarks || []
+  let list = pbGet('bookmarks', [])
   const i = list.findIndex(b => b.id === bm.id)
-  if (i >= 0) list[i] = bm; else list.push({ ...bm, id: bm.id || `bm-${Date.now()}`, addedAt: bm.addedAt || new Date().toISOString() })
-  store.bookmarks = list
-  saveStore(store)
+  if (i >= 0) list[i] = bm; else list = [...list, { ...bm, id: bm.id || `bm-${Date.now()}`, addedAt: bm.addedAt || new Date().toISOString() }]
+  pbSet('bookmarks', list)
   return list
 })
 ipcMain.handle('bookmarks:delete', (_, id) => {
-  store.bookmarks = (store.bookmarks || []).filter(b => b.id !== id)
-  saveStore(store)
+  pbSet('bookmarks', (pbGet('bookmarks', [])).filter(b => b.id !== id))
   return true
 })
 
@@ -1165,31 +1436,68 @@ ipcMain.handle('settings:import', async () => {
 })
 
 // ─── Chores ───────────────────────────────────────────────────────────────────
-ipcMain.handle('chores:list', () => store.chores || [])
+const ACHIEVEMENT_DEFS = [
+  { id: 'first_complete', name: 'First Step',        desc: 'Complete your first chore.',        rule: (p) => (p.history||[]).length >= 1 },
+  { id: 'streak_3',       name: '3-Day Streak',      desc: 'Complete any chore 3 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 3 },
+  { id: 'streak_7',       name: 'Week Warrior',      desc: 'Complete any chore 7 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 7 },
+  { id: 'streak_30',      name: 'Iron Discipline',   desc: 'Complete any chore 30 days in a row.',rule: (_, ctx) => ctx?.chore?.streak >= 30 },
+  { id: 'level_5',        name: 'Level 5',           desc: 'Reach level 5.',                     rule: (p) => (p.level||0) >= 5 },
+  { id: 'level_10',       name: 'Level 10',          desc: 'Reach level 10.',                    rule: (p) => (p.level||0) >= 10 },
+  { id: 'variety_5',      name: 'Variety',           desc: 'Complete chores in 5 categories.',   rule: (_, ctx) => {
+      const cats = new Set(); for (const h of ctx?.allHistoryWithCats || []) if (h.category) cats.add(h.category)
+      return cats.size >= 5 } },
+  { id: 'early_bird',     name: 'Early Bird',        desc: 'Complete a chore before 9am.',       rule: (_, ctx) => { const h = new Date().getHours(); return h < 9 } },
+  { id: 'night_owl',      name: 'Night Owl',         desc: 'Complete a chore after 10pm.',       rule: (_, ctx) => { const h = new Date().getHours(); return h >= 22 } },
+  { id: 'ten_done',       name: 'Ten Done',          desc: 'Complete 10 chores total.',          rule: (p) => (p.history||[]).length >= 10 },
+  { id: 'fifty_done',     name: 'Fifty Done',        desc: 'Complete 50 chores total.',          rule: (p) => (p.history||[]).length >= 50 },
+]
+
+function evaluateAchievements(profile, ctx) {
+  const unlocked = new Set(profile.achievements || [])
+  const newly = []
+  for (const def of ACHIEVEMENT_DEFS) {
+    if (unlocked.has(def.id)) continue
+    try {
+      if (def.rule(profile, ctx)) { unlocked.add(def.id); newly.push(def) }
+    } catch {}
+  }
+  profile.achievements = Array.from(unlocked)
+  return newly
+}
+
+ipcMain.handle('chores:achievements', () => ACHIEVEMENT_DEFS)
+ipcMain.handle('chores:list', () => pbGet('chores', []))
 ipcMain.handle('chores:save', (_, chore) => {
-  const list = store.chores || []
+  let list = pbGet('chores', [])
   const i = list.findIndex(c => c.id === chore.id)
-  if (i >= 0) list[i] = chore; else list.push({ ...chore, id: chore.id || `chore-${Date.now()}`, createdAt: chore.createdAt || new Date().toISOString() })
-  store.chores = list
-  saveStore(store)
+  const normalized = {
+    ...chore,
+    id: chore.id || `chore-${Date.now()}`,
+    createdAt: chore.createdAt || new Date().toISOString(),
+    category: chore.category || 'General',
+    tags: Array.isArray(chore.tags) ? chore.tags : [],
+    assignedTo: chore.assignedTo || chore.owner || 'anyone',
+  }
+  if (i >= 0) list[i] = normalized; else list = [...list, normalized]
+  pbSet('chores', list)
   return list
 })
 ipcMain.handle('chores:delete', (_, id) => {
-  store.chores = (store.chores || []).filter(c => c.id !== id)
-  saveStore(store)
+  pbSet('chores', (pbGet('chores', [])).filter(c => c.id !== id))
   return true
 })
-ipcMain.handle('chores:profile', () => store.choreProfile || { xp: 0, level: 0, achievements: [], history: [] })
-ipcMain.handle('chores:setProfile', (_, p) => { store.choreProfile = p; saveStore(store); return p })
+ipcMain.handle('chores:profile', () => pbGet('choreProfile', { xp: 0, level: 0, achievements: [], history: [] }))
+ipcMain.handle('chores:setProfile', (_, p) => { pbSet('choreProfile', p); return p })
 ipcMain.handle('chores:complete', (_, id, owner) => {
-  const chore = (store.chores || []).find(c => c.id === id)
+  const chores = pbGet('chores', [])
+  const chore = chores.find(c => c.id === id)
   if (!chore) return null
-  const profile = store.choreProfile || { xp: 0, level: 0, achievements: [], history: [] }
+  const profile = pbGet('choreProfile', { xp: 0, level: 0, achievements: [], history: [] })
   const today = new Date().toISOString().slice(0, 10)
   const pts = chore.points || (chore.difficulty || 1) * 10
   profile.xp = (profile.xp || 0) + pts
   profile.level = Math.floor(Math.sqrt(profile.xp / 50))
-  profile.history = [...(profile.history || []), { date: today, choreId: id, points: pts, owner: owner || 'me' }].slice(-500)
+  profile.history = [...(profile.history || []), { date: today, choreId: id, points: pts, owner: owner || chore.assignedTo || 'me', category: chore.category || 'General' }].slice(-500)
   // Streak
   const last = chore.lastCompleted
   if (last) {
@@ -1198,9 +1506,11 @@ ipcMain.handle('chores:complete', (_, id, owner) => {
     chore.streak = diffDays === 1 ? (chore.streak || 0) + 1 : diffDays === 0 ? (chore.streak || 1) : 1
   } else { chore.streak = 1 }
   chore.lastCompleted = today
-  store.choreProfile = profile
-  saveStore(store)
-  return { profile, chore }
+  const newly = evaluateAchievements(profile, { chore, allHistoryWithCats: profile.history })
+  // Persist both chore list and profile
+  pbSet('chores', chores.map(c => c.id === id ? chore : c))
+  pbSet('choreProfile', profile)
+  return { profile, chore, newAchievements: newly }
 })
 
 // ─── Ad-blocker init ──────────────────────────────────────────────────────────
@@ -1226,7 +1536,10 @@ function installAdBlocker() {
 }
 
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createSplash()
+  createWindow()
+})
 app.on('window-all-closed', () => { globalShortcut.unregisterAll(); if (process.platform !== 'darwin') app.quit() })
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()

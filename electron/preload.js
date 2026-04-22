@@ -145,6 +145,25 @@ contextBridge.exposeInMainWorld('api', {
     save: (bm) => ipcRenderer.invoke('bookmarks:save', bm),
     delete: (id) => ipcRenderer.invoke('bookmarks:delete', id),
   },
+  backup: {
+    export: () => ipcRenderer.invoke('settings:export'),
+    import: () => ipcRenderer.invoke('settings:import'),
+  },
+  auth: {
+    listUsers: () => ipcRenderer.invoke('auth:listUsers'),
+    currentUser: () => ipcRenderer.invoke('auth:currentUser'),
+    register: (payload) => ipcRenderer.invoke('auth:register', payload),
+    login: (payload) => ipcRenderer.invoke('auth:login', payload),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    updateProfile: (patch) => ipcRenderer.invoke('auth:updateProfile', patch),
+    changePassword: (payload) => ipcRenderer.invoke('auth:changePassword', payload),
+    deleteAccount: (payload) => ipcRenderer.invoke('auth:deleteAccount', payload),
+    recoveryLogin: (payload) => ipcRenderer.invoke('auth:recoveryLogin', payload),
+  },
+  splash: {
+    onProgress: (cb) => ipcRenderer.on('splash:progress', (_, p) => cb(p)),
+    onDone: (cb) => ipcRenderer.on('splash:done', () => cb()),
+  },
   chores: {
     list: () => ipcRenderer.invoke('chores:list'),
     save: (chore) => ipcRenderer.invoke('chores:save', chore),
@@ -152,13 +171,10 @@ contextBridge.exposeInMainWorld('api', {
     profile: () => ipcRenderer.invoke('chores:profile'),
     setProfile: (p) => ipcRenderer.invoke('chores:setProfile', p),
     complete: (id, owner) => ipcRenderer.invoke('chores:complete', id, owner),
-  },
-  backup: {
-    export: () => ipcRenderer.invoke('settings:export'),
-    import: () => ipcRenderer.invoke('settings:import'),
+    achievements: () => ipcRenderer.invoke('chores:achievements'),
   },
   on: (channel, callback) => {
-    const allowed = ['macro:status','macro:progress','system:update','clipboard:update','autoclicker:tick','autoclicker:stopped','scheduler:ran','reminder:due','shell:data','shell:closed','toast:push']
+    const allowed = ['macro:status','macro:progress','system:update','clipboard:update','autoclicker:tick','autoclicker:stopped','scheduler:ran','reminder:due','shell:data','shell:closed','toast:push','auth:changed','splash:progress','splash:done']
     if (allowed.includes(channel)) ipcRenderer.on(channel, (_, ...args) => callback(...args))
   },
   off: (channel, callback) => ipcRenderer.removeListener(channel, callback),
