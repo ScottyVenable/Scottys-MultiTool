@@ -44,6 +44,7 @@ function saveState(state) {
   catch (e) { log('error', 'store', e.message) }
 }
 let state = loadState()
+if (!state.focusRooms) state.focusRooms = {}
 let saveTimer = null
 function scheduleSave() {
   if (saveTimer) return
@@ -92,9 +93,87 @@ app.post('/presence/:userId', (req, res) => {
 })
 app.get('/presence', (_req, res) => res.json({ ok: true, presence: state.presence }))
 
+// Focus rooms — shared Pomodoro sessions.
+// Room shape: { id, name, host, members, phase, workMin, breakMin, startTs, pausedAt, pauseVotes, done }
+function makeRoom(id, host, name, workMin, breakMin) {
+  return { id, name: name || `${host}'s room`, host, members: [host], phase: 'waiting', workMin: workMin || 25, breakMin: breakMin || 5, startTs: null, pausedAt: null, pauseVotes: [], done: false }
+}
+app.get('/focus-rooms', (_req, res) => {
+  res.json({ ok: true, rooms: Object.values(state.focusRooms).filter(r => !r.done) })
+})
+app.get('/focus-rooms/:roomId', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms', (req, res) => {
+  const { host, name, workMin, breakMin } = req.body || {}
+  if (!host) return res.status(400).json({ ok: false, error: 'host required' })
+  const id = 'room-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6)
+  state.focusRooms[id] = makeRoom(id, host, name, workMin, breakMin)
+  scheduleSave()
+  broadcast({ type: 'focus:room', room: state.focusRooms[id] })
+  res.json({ ok: true, room: state.focusRooms[id] })
+})
+app.post('/focus-rooms/:roomId/join', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  const { userId } = req.body || {}
+  if (userId && !room.members.includes(userId)) room.members.push(userId)
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms/:roomId/leave', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  const { userId } = req.body || {}
+  room.members = room.members.filter(m => m !== userId)
+  room.pauseVotes = room.pauseVotes.filter(m => m !== userId)
+  if (room.members.length === 0) room.done = true
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms/:roomId/start', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  room.phase = 'work'; room.startTs = Date.now(); room.pausedAt = null; room.pauseVotes = []
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms/:roomId/pause-vote', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  const { userId } = req.body || {}
+  if (userId && !room.pauseVotes.includes(userId)) room.pauseVotes.push(userId)
+  const quorum = Math.ceil(room.members.length / 2)
+  if (room.pauseVotes.length >= quorum && !room.pausedAt) room.pausedAt = Date.now()
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms/:roomId/resume', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  if (room.pausedAt) { room.startTs += Date.now() - room.pausedAt; room.pausedAt = null; room.pauseVotes = [] }
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+app.post('/focus-rooms/:roomId/phase', (req, res) => {
+  const room = state.focusRooms[req.params.roomId]
+  if (!room) return res.status(404).json({ ok: false, error: 'not found' })
+  const { phase } = req.body || {}
+  if (phase) { room.phase = phase; room.startTs = Date.now(); room.pausedAt = null; room.pauseVotes = [] }
+  scheduleSave()
+  broadcast({ type: 'focus:room', room })
+  res.json({ ok: true, room })
+})
+
 // Messages — flat list for now, UI filters by conversation.
-app.get('/messages/:userId', (req, res) => {
-  const mine = state.messages.filter(m => m.to === req.params.userId || m.from === req.params.userId)
+app.get('/messages/:userId', (req, res) => {  const mine = state.messages.filter(m => m.to === req.params.userId || m.from === req.params.userId)
   res.json({ ok: true, messages: mine })
 })
 app.post('/messages', (req, res) => {
