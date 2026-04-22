@@ -1537,7 +1537,8 @@ function installAdBlocker() {
 
 
 app.whenReady().then(() => {
-  createSplash()
+  // Skip splash in test mode to keep Playwright's firstWindow() deterministic.
+  if (!process.env.MACROBOT_TEST) createSplash()
   createWindow()
 })
 app.on('window-all-closed', () => { globalShortcut.unregisterAll(); if (process.platform !== 'darwin') app.quit() })

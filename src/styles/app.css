@@ -929,3 +929,15 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .achievement-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--accent-dim); color: var(--accent-h); flex-shrink: 0; }
 .achievement-name { font-size: 12.5px; font-weight: 600; color: var(--text-0); }
 .achievement-desc { font-size: 11px; color: var(--text-2); }
+
+/* ── Browser tab strip & address bar ────────────────────────────────── */
+.browser-tabstrip { display: flex; gap: 4px; padding: 4px 8px 0; border-bottom: 1px solid var(--border); align-items: flex-end; background: var(--bg-1); }
+.browser-tab { position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; border-radius: 6px 6px 0 0; background: var(--bg-3); color: var(--text-1); cursor: pointer; max-width: 200px; border: 1px solid transparent; border-bottom: none; transition: background 0.12s; }
+.browser-tab:hover { background: var(--bg-2); }
+.browser-tab.active { background: var(--bg-2); color: var(--text-0); border-color: var(--border); }
+.browser-tab-favicon { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; object-fit: contain; }
+.browser-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.browser-tab-loading { position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: browser-loading 1.1s linear infinite; border-radius: 2px; }
+@keyframes browser-loading { 0% { background-position: -100% 0; } 100% { background-position: 200% 0; } }
+.browser-addressbar { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--border); align-items: center; background: var(--bg-1); }
+.browser-find { position: absolute; top: 40px; right: 16px; z-index: 30; display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }

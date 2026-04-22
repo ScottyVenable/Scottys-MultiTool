@@ -34,6 +34,8 @@ async function launchApp(opts = {}) {
       } catch (e) { return { ok: false, error: String(e && e.message || e) } }
     })
     if (!res?.ok) throw new Error('auth bootstrap failed: ' + (res?.error || 'unknown'))
+    // Wait for the main app to render so subsequent interactions are deterministic.
+    await win.locator('.sidebar').waitFor({ state: 'visible', timeout: 10_000 })
   }
   return { app, win, userData }
 }

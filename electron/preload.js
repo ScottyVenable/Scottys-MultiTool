@@ -127,7 +127,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   screen: {
     sources: () => ipcRenderer.invoke('screen:sources'),
-    capture: (sourceId) => ipcRenderer.invoke('screen:capture', sourceId),
+    capture: (sourceId, opts) => ipcRenderer.invoke('screen:capture', sourceId, opts),
   },
   action: {
     execute: (action) => ipcRenderer.invoke('action:execute', action),
