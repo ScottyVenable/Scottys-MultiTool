@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Timer, Play, Pause, Square, RotateCcw, Coffee, Brain, Settings } from 'lucide-react'
+import { useCurrency } from './CurrencyContext'
 
 const PRESETS = [
   { label: 'Pomodoro', work: 25, shortBreak: 5, longBreak: 15 },
@@ -9,6 +10,7 @@ const PRESETS = [
 ]
 
 export default function FocusTimer() {
+  const { award } = useCurrency()
   const [workMin, setWorkMin] = useState(25)
   const [shortBreak, setShortBreak] = useState(5)
   const [longBreak, setLongBreak] = useState(15)
@@ -46,6 +48,7 @@ export default function FocusTimer() {
     if (phase === 'work') {
       const newCount = sessionsComplete + 1
       setSessionsComplete(newCount)
+      try { award('focus_complete', { label: `Focus · ${workMin}m` }) } catch {}
       if (newCount % sessionsUntilLong === 0) {
         setPhase('long')
         setSeconds(longBreak * 60)

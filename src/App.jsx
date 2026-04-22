@@ -39,6 +39,8 @@ import StatusBar from './components/StatusBar'
 import { ToastProvider } from './components/Toast'
 import { NotificationsProvider } from './components/NotificationsContext'
 import NotificationsCenter from './components/NotificationsCenter'
+import { CurrencyProvider } from './components/CurrencyContext'
+import CoinsPill from './components/CoinsPill'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
 import CommandPalette from './components/CommandPalette'
@@ -252,6 +254,7 @@ function MainApp() {
             <span className="topbar-title">{NAV.find(n => n.id === page)?.label}</span>
           </div>
           <div className="topbar-right">
+            <CoinsPill />
             <NotificationsCenter onNavigate={setPage} />
             <button className="win-btn" onClick={() => isElectron && window.api.window.minimize()}><Minus size={12} /></button>
             <button className="win-btn" onClick={() => isElectron && window.api.window.maximize()}><Square size={11} /></button>
@@ -277,11 +280,13 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <NotificationsProvider>
-          <AIAttachmentProvider>
-            <AuthGate>
-              <MainApp />
-            </AuthGate>
-          </AIAttachmentProvider>
+          <CurrencyProvider>
+            <AIAttachmentProvider>
+              <AuthGate>
+                <MainApp />
+              </AuthGate>
+            </AIAttachmentProvider>
+          </CurrencyProvider>
         </NotificationsProvider>
       </ToastProvider>
     </AuthProvider>

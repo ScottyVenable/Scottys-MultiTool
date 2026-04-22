@@ -1343,3 +1343,47 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .browser-fetched-title { flex:1; font-weight:600; color: var(--text-0); font-size: 13px; }
 .browser-fetched-body { font-size: 12px; color: var(--text-2); line-height:1.5; max-height: 120px; overflow:auto; white-space: pre-wrap; }
 .browser-fetched-actions { margin-top:8px; display:flex; align-items:center; }
+
+/* --- Coins pill + challenges panel --- */
+.coins-pill-wrap { position: relative; display: inline-flex; }
+.coins-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background: var(--bg-2); border:1px solid var(--border); border-radius: 999px; color: var(--text-0); font: 600 11px/1 var(--mono, ui-monospace, Menlo, monospace); cursor:pointer; }
+.coins-pill:hover { background: var(--bg-3); border-color: var(--accent-dim); }
+.coins-pill-val { color: var(--yellow); }
+.coins-panel { position:absolute; top: calc(100% + 6px); right: 0; width: 300px; background: var(--bg-1); border:1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); padding: 10px; z-index: 1000; display:flex; flex-direction:column; gap: 6px; }
+.coins-panel-head { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; }
+.coins-panel-list { display:flex; flex-direction:column; gap:8px; }
+.coins-empty { font-size: 11px; color: var(--text-3); padding: 6px 2px; }
+.coins-chal { padding:6px 8px; background: var(--bg-2); border:1px solid var(--border); border-radius: 6px; }
+.coins-chal.done { opacity: .6; }
+.coins-chal-row { display:flex; justify-content:space-between; align-items:center; font-size:12px; color: var(--text-0); }
+.coins-chal-reward { color: var(--yellow); font-weight:600; font-size: 11px; }
+.coins-chal-bar { margin:6px 0 4px; height:4px; background: var(--bg-3); border-radius:2px; overflow:hidden; }
+.coins-chal-fill { height:100%; background: var(--accent); transition: width .3s ease; }
+.coins-chal-meta { display:flex; align-items:center; gap:4px; font-size: 10px; color: var(--text-2); }
+.coins-tx-list { display:flex; flex-direction:column; gap:3px; max-height: 180px; overflow:auto; }
+.coins-tx { display:flex; justify-content:space-between; font-size: 11px; padding: 3px 4px; }
+.coins-tx-label { color: var(--text-1); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.coins-tx-amt.pos { color: var(--green); font-weight: 600; }
+.coins-tx-amt.neg { color: var(--red); font-weight: 600; }
+
+/* --- Coins pill + challenges panel --- */
+.coins-pill-wrap { position: relative; display: inline-flex; }
+.coins-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background: var(--bg-2); border:1px solid var(--border); border-radius: 999px; color: var(--text-0); font: 600 11px/1 var(--mono, ui-monospace, Menlo, monospace); cursor:pointer; }
+.coins-pill:hover { background: var(--bg-3); border-color: var(--accent-dim); }
+.coins-pill-val { color: var(--yellow); }
+.coins-panel { position:absolute; top: calc(100% + 6px); right: 0; width: 300px; background: var(--bg-1); border:1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); padding: 10px; z-index: 1000; display:flex; flex-direction:column; gap: 6px; }
+.coins-panel-head { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; }
+.coins-panel-list { display:flex; flex-direction:column; gap:8px; }
+.coins-empty { font-size: 11px; color: var(--text-3); padding: 6px 2px; }
+.coins-chal { padding:6px 8px; background: var(--bg-2); border:1px solid var(--border); border-radius: 6px; }
+.coins-chal.done { opacity: .6; }
+.coins-chal-row { display:flex; justify-content:space-between; align-items:center; font-size:12px; color: var(--text-0); }
+.coins-chal-reward { color: var(--yellow); font-weight:600; font-size: 11px; }
+.coins-chal-bar { margin:6px 0 4px; height:4px; background: var(--bg-3); border-radius:2px; overflow:hidden; }
+.coins-chal-fill { height:100%; background: var(--accent); transition: width .3s ease; }
+.coins-chal-meta { display:flex; align-items:center; gap:4px; font-size: 10px; color: var(--text-2); }
+.coins-tx-list { display:flex; flex-direction:column; gap:3px; max-height: 180px; overflow:auto; }
+.coins-tx { display:flex; justify-content:space-between; font-size: 11px; padding: 3px 4px; }
+.coins-tx-label { color: var(--text-1); overflow:hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.coins-tx-amt.pos { color: var(--green); font-weight: 600; }
+.coins-tx-amt.neg { color: var(--red); font-weight: 600; }

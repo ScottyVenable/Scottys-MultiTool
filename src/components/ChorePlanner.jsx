@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Trophy, Plus, Check, Trash2, Sparkles, Star, Flame, X, User, Calendar, Award, Tag, Users, Home as HomeIcon } from 'lucide-react'
 import { useToast } from './Toast'
 import { logError, safeCall } from '../utils/logger'
+import { useCurrency } from './CurrencyContext'
 
 const DAYS = [
   { id: 'daily', label: 'Daily' },
@@ -127,6 +128,7 @@ function ChoreModal({ chore, onSave, onClose, memberOptions }) {
 
 export default function ChorePlanner() {
   const toast = useToast()
+  const { award } = useCurrency()
   const [tab, setTab] = useState('today')
   const [chores, setChores] = useState([])
   const [profile, setProfile] = useState({ xp: 0, level: 0, achievements: [], history: [] })
@@ -227,6 +229,7 @@ export default function ChorePlanner() {
     if (result?.profile) {
       setProfile(result.profile)
       setChores(prev => prev.map(c => c.id === chore.id ? result.chore : c))
+      try { award('chore_complete', { label: chore.title }) } catch {}
       toast.show({ type: 'success', title: `+${chore.points || chore.difficulty*10} XP`, message: chore.title })
       if (result.profile.level > prevLevel) {
         toast.show({ type: 'success', title: `🎉 Level up!`, message: `You are now level ${result.profile.level}` })
