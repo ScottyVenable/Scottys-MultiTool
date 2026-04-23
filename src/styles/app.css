@@ -110,7 +110,23 @@ html, body, #root {
   letter-spacing: 0.08em;
   color: var(--text-3);
   padding: 12px 8px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color var(--t);
 }
+.nav-section-label:hover { color: var(--text-1); }
+.nav-section-chevron {
+  color: var(--text-3);
+  transition: transform var(--t);
+}
+.nav-section-label.collapsed .nav-section-chevron { transform: rotate(-90deg); }
 
 .nav-item {
   display: flex;
@@ -1528,3 +1544,23 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .shop-buy-btn:hover:not(:disabled) { opacity:.85; }
 .shop-buy-btn.locked { background:var(--bg-3); color:var(--text-2); cursor:not-allowed; }
 .shop-owned-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--green); font-weight:600; }
+
+/* ===== Status Bar — AI generating ===== */
+.status-ind.generating .status-dot {
+  animation: status-ai-pulse 1.1s ease-in-out infinite;
+  box-shadow: 0 0 0 0 var(--accent);
+}
+.status-ind.generating .status-ai-label {
+  font-size: 10px;
+  color: var(--accent);
+  margin-left: 4px;
+  animation: status-ai-fade 1.4s ease-in-out infinite;
+}
+@keyframes status-ai-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.65; }
+}
+@keyframes status-ai-fade {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}

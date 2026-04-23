@@ -4,7 +4,7 @@ import {
   Clipboard, Timer, Monitor, Bot, Smartphone, Settings, HelpCircle,
   Minus, Square, X, Rocket, StickyNote, AppWindow, CalendarClock, Volume2, Wrench, Pipette,
   BookOpen, BookHeart, Bell, FolderOpen, Trophy, Globe, Image as ImageIcon, Search,
-  User as UserIcon, LogOut, ChevronUp, LayoutGrid, Sparkles, Code2, Users, MessageSquare, ShoppingBag
+  User as UserIcon, LogOut, ChevronUp, ChevronDown, LayoutGrid, Sparkles, Code2, Users, MessageSquare, ShoppingBag, Wrench as WrenchIcon
 } from 'lucide-react'
 import WelcomeScreen from './components/WelcomeScreen'
 import Dashboard from './components/Dashboard'
@@ -46,6 +46,8 @@ import FriendsPanel from './components/FriendsPanel'
 import MessagesCenter from './components/MessagesCenter'
 import FocusWithFriends from './components/FocusWithFriends'
 import { FriendsProvider } from './components/FriendsContext'
+import { DevModeProvider, useDevMode } from './components/DevModeContext'
+import DevTools from './components/DevTools'
 import ErrorBoundary from './components/ErrorBoundary'
 import { AIAttachmentProvider } from './utils/aiAttachment'
 import CommandPalette from './components/CommandPalette'
@@ -83,6 +85,7 @@ const NAV = [
   { id: 'mobile',        label: 'Mobile Remote',   icon: Smartphone,      section: 'connect' },
   { id: 'components',    label: 'Components',      icon: LayoutGrid,      section: 'config' },
   { id: 'shop',          label: 'Rewards Shop',    icon: ShoppingBag,     section: 'config' },
+  { id: 'devtools',      label: 'Dev Tools',       icon: WrenchIcon,      section: 'config', devOnly: true },
   { id: 'settings',      label: 'Settings',        icon: Settings,        section: 'config' },
   { id: 'help',          label: 'Help',            icon: HelpCircle,      section: 'config' },
 ]
@@ -127,6 +130,7 @@ const PAGE_MAP = {
   mobile: MobileRemote,
   components: ComponentsPage,
   shop: CoinsShop,
+  devtools: DevTools,
   settings: AppSettings,
   help: HelpDocs,
 }
@@ -164,9 +168,19 @@ function SidebarUser({ onNavigate }) {
 
 function MainApp() {
   const { user } = useAuth()
+  const { devMode } = useDevMode()
   const [page, setPage] = useState(() => user?.preferences?.defaultPage || 'welcome')
   const [macroCounts, setMacroCounts] = useState(0)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // Persist collapsed sidebar sections in localStorage so the choice survives
+  // reloads. Stored as an array of section ids (anything in here is collapsed).
+  const [collapsedSections, setCollapsedSections] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sidebar-collapsed') || '[]') } catch { return [] }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('sidebar-collapsed', JSON.stringify(collapsedSections)) } catch {}
+  }, [collapsedSections])
+  const toggleSection = (id) => setCollapsedSections(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   const isElectron = !!window.api
 
   useEffect(() => {
@@ -227,11 +241,25 @@ function MainApp() {
 
         <nav className="sidebar-nav">
           {SECTIONS.map(section => {
-            const items = NAV.filter(n => n.section === section.id)
+            const items = NAV.filter(n => n.section === section.id && (!n.devOnly || devMode))
+            if (items.length === 0) return null
+            const isCollapsed = collapsedSections.includes(section.id)
+            // The unlabeled main section is never collapsible — it always shows.
+            const collapsible = !!section.label
             return (
               <div key={section.id}>
-                {section.label && <div className="nav-section-label">{section.label}</div>}
-                {items.map(item => {
+                {section.label && (
+                  <button
+                    type="button"
+                    className={`nav-section-label${isCollapsed ? ' collapsed' : ''}`}
+                    onClick={() => toggleSection(section.id)}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <ChevronDown size={10} className="nav-section-chevron" />
+                    {section.label}
+                  </button>
+                )}
+                {(!collapsible || !isCollapsed) && items.map(item => {
                   const Icon = item.icon
                   return (
                     <div
@@ -293,15 +321,17 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <NotificationsProvider>
-          <CurrencyProvider>
-            <FriendsProvider>
-              <AIAttachmentProvider>
-                <AuthGate>
-                  <MainApp />
-                </AuthGate>
-              </AIAttachmentProvider>
-            </FriendsProvider>
-          </CurrencyProvider>
+          <DevModeProvider>
+            <CurrencyProvider>
+              <FriendsProvider>
+                <AIAttachmentProvider>
+                  <AuthGate>
+                    <MainApp />
+                  </AuthGate>
+                </AIAttachmentProvider>
+              </FriendsProvider>
+            </CurrencyProvider>
+          </DevModeProvider>
         </NotificationsProvider>
       </ToastProvider>
     </AuthProvider>
