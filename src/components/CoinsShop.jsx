@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { ShoppingBag, Check, Lock, Coins } from 'lucide-react'
+import { ShoppingBag, Check, Lock, Coins, Award, Target, Moon, Trees, Flower, PartyPopper, Flame } from 'lucide-react'
 import { useCurrency } from './CurrencyContext'
 import { useToast } from './Toast'
 
-// Catalog of purchasable cosmetic rewards.
-// `effect` is optional — just metadata the app can query via the purchases array.
+// Catalog of purchasable cosmetic rewards. Icons use lucide-react components
+// (no emoji) so they respect theme colors and match the rest of the UI.
 const CATALOG = [
   {
     id: 'title-early-backer',
@@ -12,7 +12,7 @@ const CATALOG = [
     name: 'Early Backer',
     description: 'Show "Early Backer" under your avatar in social features.',
     cost: 200,
-    icon: '🎖️',
+    Icon: Award,
   },
   {
     id: 'title-focus-master',
@@ -20,7 +20,7 @@ const CATALOG = [
     name: 'Focus Master',
     description: 'Show "Focus Master" for completing 10 focus sessions.',
     cost: 500,
-    icon: '🎯',
+    Icon: Target,
   },
   {
     id: 'theme-midnight',
@@ -28,7 +28,7 @@ const CATALOG = [
     name: 'Midnight',
     description: 'Deep dark variant with midnight-blue accent.',
     cost: 300,
-    icon: '🌙',
+    Icon: Moon,
   },
   {
     id: 'theme-forest',
@@ -36,7 +36,7 @@ const CATALOG = [
     name: 'Forest',
     description: 'Earthy tones with green accent.',
     cost: 300,
-    icon: '🌲',
+    Icon: Trees,
   },
   {
     id: 'theme-rose',
@@ -44,7 +44,7 @@ const CATALOG = [
     name: 'Rose',
     description: 'Warm rose-pink accent on dark bg.',
     cost: 300,
-    icon: '🌹',
+    Icon: Flower,
   },
   {
     id: 'effect-confetti',
@@ -52,7 +52,7 @@ const CATALOG = [
     name: 'Confetti on complete',
     description: 'Burst of confetti when you finish a focus session.',
     cost: 150,
-    icon: '🎉',
+    Icon: PartyPopper,
   },
   {
     id: 'effect-streak-badge',
@@ -60,7 +60,7 @@ const CATALOG = [
     name: 'Streak Badge',
     description: 'Show a flame badge on your avatar after 3 days in a row.',
     cost: 250,
-    icon: '🔥',
+    Icon: Flame,
   },
 ]
 
@@ -76,12 +76,12 @@ export default function CoinsShop() {
   function handleBuy(item) {
     if (purchases.includes(item.id)) return
     if (coins < item.cost) {
-      toast?.({ message: `Not enough coins — need ${item.cost - coins} more`, type: 'error' })
+      toast?.show?.({ type: 'error', title: 'Not enough coins', message: `Need ${item.cost - coins} more` })
       return
     }
     const ok = purchase(item.id, item.name, item.cost)
-    if (ok) toast?.({ message: `Unlocked: ${item.name}!`, type: 'success' })
-    else toast?.({ message: 'Purchase failed', type: 'error' })
+    if (ok) toast?.show?.({ type: 'success', title: 'Unlocked', message: item.name })
+    else toast?.show?.({ type: 'error', title: 'Purchase failed' })
   }
 
   return (
@@ -90,7 +90,7 @@ export default function CoinsShop() {
         <div className="shop-title-row">
           <ShoppingBag size={16} /> Rewards Shop
           <span className="shop-balance">
-            <span className="shop-coin-icon">🪙</span>
+            <Coins size={13} />
             {coins.toLocaleString()} coins
           </span>
         </div>
@@ -111,9 +111,10 @@ export default function CoinsShop() {
         {visible.map(item => {
           const owned = purchases.includes(item.id)
           const canAfford = coins >= item.cost
+          const ItemIcon = item.Icon || Award
           return (
             <div key={item.id} className={`shop-card${owned ? ' owned' : ''}`}>
-              <div className="shop-card-icon">{item.icon}</div>
+              <div className="shop-card-icon"><ItemIcon size={22} /></div>
               <div className="shop-card-body">
                 <div className="shop-card-category">{item.category}</div>
                 <div className="shop-card-name">{item.name}</div>
@@ -130,7 +131,7 @@ export default function CoinsShop() {
                     title={!canAfford ? `Need ${item.cost - coins} more coins` : undefined}
                   >
                     {canAfford ? null : <Lock size={11} />}
-                    🪙 {item.cost.toLocaleString()}
+                    <Coins size={11} /> {item.cost.toLocaleString()}
                   </button>
                 )}
               </div>
