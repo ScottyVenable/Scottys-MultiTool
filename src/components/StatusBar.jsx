@@ -81,9 +81,22 @@ export default function StatusBar() {
       </div>
 
       <div className="status-right">
-        <span className="status-ind" title={`AI: ${ai.state || 'idle'}`}>
+        <span
+          className={`status-ind${ai.state === 'generating' ? ' generating' : ''}`}
+          title={`AI: ${ai.state || 'idle'}`}
+        >
           <Bot size={12} />
-          <span className="status-dot" style={{ background: ai.state === 'ready' ? 'var(--green)' : ai.state === 'error' ? 'var(--red)' : 'var(--text-3)' }} />
+          <span
+            className="status-dot"
+            style={{
+              background:
+                ai.state === 'generating' ? 'var(--accent)'
+                : ai.state === 'ready' ? 'var(--green)'
+                : ai.state === 'error' ? 'var(--red)'
+                : 'var(--text-3)',
+            }}
+          />
+          {ai.state === 'generating' && <span className="status-ai-label">generating…</span>}
         </span>
         <span className="status-ind" title={`CDP: ${cdp.connected ? 'attached' : 'detached'}`}>
           <Monitor size={12} />

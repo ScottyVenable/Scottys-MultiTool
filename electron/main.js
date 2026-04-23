@@ -1419,6 +1419,129 @@ ipcMain.handle('ai:query', async (_, { prompt, endpoint, apiKey, model, images, 
   })
 })
 
+// Streaming variant of ai:query. Emits `ai:stream:chunk` events to the sender
+// web contents as tokens arrive, then `ai:stream:end` with { success, content|error }.
+// The `streamId` argument lets the renderer correlate events to requests.
+ipcMain.handle('ai:queryStream', async (evt, { streamId, prompt, endpoint, apiKey, model, images, temperature, maxTokens, topP, systemPrompt, useContext }) => {
+  const sender = evt.sender
+  const send = (channel, payload) => { try { sender.send(channel, payload) } catch {} }
+  try {
+    const baseUrl = endpoint || 'https://api.openai.com'
+    const url = new URL(`${baseUrl}/v1/chat/completions`)
+
+    let sys = systemPrompt || ''
+    if (useContext) {
+      try {
+        const q = String(prompt || '').toLowerCase()
+        const match = (text) => (text || '').toLowerCase().includes(q.slice(0, 40))
+        const jrn = (store.journal || []).filter(e => match(e.content)).slice(-5).map(e => `[Journal ${e.date}] ${e.content.slice(0, 300)}`)
+        const nts = (store.notes || []).filter(n => match(n.title) || match(n.content)).slice(-5).map(n => `[Note: ${n.title}] ${(n.content || '').slice(0, 300)}`)
+        const rms = (store.reminders || []).filter(r => match(r.title) || match(r.description)).slice(-5).map(r => `[Reminder] ${r.title} @ ${r.datetime}: ${r.description || ''}`)
+        const ctx = [...jrn, ...nts, ...rms].join('\n')
+        if (ctx) sys = (sys + '\n\nUser context (for reference):\n' + ctx).trim()
+      } catch {}
+    }
+
+    const messages = []
+    if (sys) messages.push({ role: 'system', content: sys })
+    if (images && images.length) {
+      messages.push({ role: 'user', content: [
+        { type: 'text', text: prompt },
+        ...images.map(src => ({ type: 'image_url', image_url: { url: src } })),
+      ] })
+    } else {
+      messages.push({ role: 'user', content: prompt })
+    }
+
+    const body = JSON.stringify({
+      model: model || 'local-model',
+      messages,
+      max_tokens: maxTokens || 2000,
+      temperature: typeof temperature === 'number' ? temperature : 0.7,
+      top_p: typeof topP === 'number' ? topP : 1.0,
+      stream: true,
+    })
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        Accept: 'text/event-stream',
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+      },
+      timeout: 120000,
+    }
+    const proto = url.protocol === 'https:' ? require('https') : http
+
+    return await new Promise((resolve) => {
+      let full = ''
+      let buffer = ''
+      const req = proto.request(options, (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          let errData = ''
+          res.on('data', d => { errData += d })
+          res.on('end', () => {
+            const result = { success: false, streamId, code: 'AI_API_ERROR', error: errData.slice(0, 300) || `HTTP ${res.statusCode}` }
+            send('ai:stream:end', result)
+            resolve(result)
+          })
+          return
+        }
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => {
+          buffer += chunk
+          // Parse SSE: split on double newline between events.
+          let idx
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const raw = buffer.slice(0, idx)
+            buffer = buffer.slice(idx + 2)
+            for (const line of raw.split('\n')) {
+              const trimmed = line.trim()
+              if (!trimmed.startsWith('data:')) continue
+              const data = trimmed.slice(5).trim()
+              if (!data || data === '[DONE]') continue
+              try {
+                const j = JSON.parse(data)
+                const delta = j.choices?.[0]?.delta?.content || ''
+                if (delta) {
+                  full += delta
+                  send('ai:stream:chunk', { streamId, delta })
+                }
+              } catch {}
+            }
+          }
+        })
+        res.on('end', () => {
+          const result = { success: true, streamId, content: full }
+          send('ai:stream:end', result)
+          resolve(result)
+        })
+      })
+      req.on('error', (e) => {
+        const result = { success: false, streamId, error: String(e?.message || e), code: e?.code || 'AI_STREAM_ERROR' }
+        send('ai:stream:end', result)
+        resolve(result)
+      })
+      req.on('timeout', () => {
+        req.destroy()
+        const result = { success: false, streamId, error: 'Request timed out after 120s', code: 'AI_TIMEOUT' }
+        send('ai:stream:end', result)
+        resolve(result)
+      })
+      req.write(body)
+      req.end()
+    })
+  } catch (e) {
+    const result = { success: false, streamId, error: String(e?.message || e), code: 'AI_STREAM_ERROR' }
+    try { sender.send('ai:stream:end', result) } catch {}
+    return result
+  }
+})
+
 ipcMain.handle('ai:buildContext', (_, query) => {
   const q = String(query || '').toLowerCase()
   const match = (text) => !q || (text || '').toLowerCase().includes(q.slice(0, 40))

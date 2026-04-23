@@ -23,16 +23,29 @@ const SUGGESTIONS = [
   'How do I loop a macro 10 times with a delay?',
 ]
 
+const CHAT_STORE_KEY = 'ai-chat-history'
+const CLI_STORE_KEY = 'ai-cli-state'
+
 function ChatTab({ aiConfig }) {
   const toast = useToast()
   const { user } = useAuth()
   const userInitial = (user?.displayName || user?.username || 'S').trim().charAt(0).toUpperCase() || 'S'
   const { attachments, remove, clear } = useAIAttachments()
-  const [messages, setMessages] = useState([
-    { id: 0, role: 'ai', content: "Hello! I'm your AI automation assistant. Ask me anything or try a suggestion below." }
-  ])
+  // Restore any previously-saved chat messages so switching tabs (or relaunching)
+  // doesn't lose context. Falls back to the default greeting on first run.
+  const [messages, setMessages] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_STORE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length) return parsed
+      }
+    } catch {}
+    return [{ id: 0, role: 'ai', content: "Hello! I'm your AI automation assistant. Ask me anything or try a suggestion below." }]
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streaming, setStreaming] = useState(false)
   const [useContext, setUseContext] = useState(false)
   const [listening, setListening] = useState(false)
   const recogRef = useRef(null)
@@ -40,6 +53,20 @@ function ChatTab({ aiConfig }) {
   const isElectron = !!window.api
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Persist history to localStorage (quota-safe: capped + serialized plainly).
+  useEffect(() => {
+    try {
+      const trimmed = messages.slice(-60) // keep last 60 to stay well under quota
+      localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(trimmed))
+    } catch {}
+  }, [messages])
+
+  // Broadcast an `ai:state` event so the StatusBar (and anyone else listening)
+  // can show a "generating" indicator while a request is in flight.
+  useEffect(() => {
+    const state = loading ? 'generating' : (messages.some(m => m.role === 'ai' && !m.isError) ? 'ready' : 'idle')
+    window.dispatchEvent(new CustomEvent('ai:state', { detail: { state } }))
+  }, [loading, messages])
 
   const toggleMic = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -79,6 +106,63 @@ function ChatTab({ aiConfig }) {
       for (const a of attachments) {
         if (a.type === 'image' && a.dataUrl) images.push(a.dataUrl)
       }
+
+      // Prefer streaming when the main-process bridge exposes it so the user
+      // sees tokens as they arrive. Fall back to the non-streaming ai.query if
+      // streaming isn't available (older preload build or network issue).
+      const canStream = !!window.api.ai.queryStream
+      if (canStream) {
+        setStreaming(true)
+        const streamId = `s-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+        const assistantId = Date.now() + 1
+        setMessages(m => [...m, { id: assistantId, role: 'ai', content: '', streaming: true }])
+
+        let resolved = false
+        await new Promise((resolve) => {
+          const onChunk = (payload) => {
+            if (!payload || payload.streamId !== streamId) return
+            setMessages(m => m.map(x => x.id === assistantId ? { ...x, content: (x.content || '') + (payload.delta || '') } : x))
+          }
+          const onEnd = (payload) => {
+            if (!payload || payload.streamId !== streamId) return
+            window.api.off('ai:stream:chunk', onChunk)
+            window.api.off('ai:stream:end', onEnd)
+            if (payload.success) {
+              setMessages(m => m.map(x => x.id === assistantId ? { ...x, content: payload.content || x.content, streaming: false } : x))
+            } else {
+              const body = `**AI error**\n\n${payload.error || 'Unknown streaming error'}\n\n_See Help → AI for setup steps._`
+              setMessages(m => m.map(x => x.id === assistantId ? { ...x, content: body, streaming: false, isError: true } : x))
+            }
+            resolved = true
+            resolve()
+          }
+          window.api.on('ai:stream:chunk', onChunk)
+          window.api.on('ai:stream:end', onEnd)
+          window.api.ai.queryStream({
+            streamId,
+            prompt: msg,
+            systemPrompt: aiConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
+            endpoint,
+            apiKey: (aiConfig.provider === 'openai' || aiConfig.provider === 'anthropic') ? aiConfig.apiKey : undefined,
+            model: aiConfig.model || 'local-model',
+            images: images.length ? images : undefined,
+            useContext,
+            temperature: aiConfig.temperature,
+            maxTokens: aiConfig.maxTokens,
+            topP: aiConfig.topP,
+          }).then((r) => {
+            // invoke's promise resolves after ai:stream:end fires; guard against
+            // the rare case where the end event didn't reach us.
+            if (!resolved) onEnd(r)
+          }).catch((e) => {
+            if (!resolved) onEnd({ success: false, streamId, error: String(e?.message || e) })
+          })
+        })
+        setStreaming(false)
+        clear()
+        return
+      }
+
       const result = await window.api.ai.query({
         prompt: msg,
         systemPrompt: aiConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT,
@@ -122,7 +206,7 @@ function ChatTab({ aiConfig }) {
             </div>
           </div>
         ))}
-        {loading && (
+        {loading && !streaming && (
           <div className="chat-msg ai">
             <div className="chat-avatar"><Bot size={16} /></div>
             <div className="chat-bubble"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}><Loader size={12} className="animate-spin" /> Thinking...</span></div>
@@ -149,7 +233,11 @@ function ChatTab({ aiConfig }) {
         </label>
       </div>
       <div className="chat-input-row">
-        <button className="btn btn-ghost btn-sm" onClick={() => setMessages([{ id: 0, role: 'ai', content: 'Chat cleared.' }])}><Trash2 size={13} /></button>
+        <button className="btn btn-ghost btn-sm" onClick={() => {
+          const fresh = [{ id: 0, role: 'ai', content: 'Chat cleared.' }]
+          setMessages(fresh)
+          try { localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(fresh)) } catch {}
+        }}><Trash2 size={13} /></button>
         <button className={`btn btn-sm ${listening ? 'btn-danger' : 'btn-ghost'}`} onClick={toggleMic} title={listening ? 'Stop listening' : 'Voice input'}>
           {listening ? <MicOff size={13} /> : <Mic size={13} />}
         </button>
@@ -161,7 +249,12 @@ function ChatTab({ aiConfig }) {
 }
 
 function AgentCLITab({ standalone = false }) {
-  const [output, setOutput] = useState('')
+  // Persist the CLI output so users switching tabs don't lose scrollback.
+  // The underlying PowerShell process is owned by the main process, so we also
+  // track a "running" flag separately; it's reset when the shell closes.
+  const [output, setOutput] = useState(() => {
+    try { return localStorage.getItem(CLI_STORE_KEY) || '' } catch { return '' }
+  })
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
   const outputRef = useRef(null)
@@ -169,14 +262,30 @@ function AgentCLITab({ standalone = false }) {
 
   useEffect(() => {
     if (!isElectron) return
-    window.api.on('shell:data', (text) => {
-      setOutput(o => o + text)
+    const onData = (text) => {
+      setOutput(o => {
+        const next = o + text
+        try { localStorage.setItem(CLI_STORE_KEY, next.slice(-200_000)) } catch {}
+        return next
+      })
       setTimeout(() => { if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight }, 0)
-    })
-    window.api.on('shell:closed', () => { setRunning(false) })
+    }
+    const onClosed = () => { setRunning(false) }
+    window.api.on('shell:data', onData)
+    window.api.on('shell:closed', onClosed)
+    return () => {
+      window.api.off('shell:data', onData)
+      window.api.off('shell:closed', onClosed)
+    }
   }, [])
 
-  const spawn = async () => { if (!isElectron) return; setOutput(''); setRunning(true); await window.api.shell.spawn() }
+  const spawn = async () => {
+    if (!isElectron) return
+    setOutput('')
+    try { localStorage.removeItem(CLI_STORE_KEY) } catch {}
+    setRunning(true)
+    await window.api.shell.spawn()
+  }
   const sendCmd = async () => {
     if (!isElectron || !input.trim()) return
     setOutput(o => o + `\n> ${input}\n`)

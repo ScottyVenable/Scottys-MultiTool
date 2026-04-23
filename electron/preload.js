@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   ai: {
     query: (opts) => ipcRenderer.invoke('ai:query', opts),
+    queryStream: (opts) => ipcRenderer.invoke('ai:queryStream', opts),
     models: (endpoint) => ipcRenderer.invoke('ai:models', endpoint),
     buildContext: (query) => ipcRenderer.invoke('ai:buildContext', query),
   },
@@ -221,7 +222,7 @@ contextBridge.exposeInMainWorld('api', {
     achievements: () => ipcRenderer.invoke('chores:achievements'),
   },
   on: (channel, callback) => {
-    const allowed = ['macro:status','macro:progress','system:update','clipboard:update','autoclicker:tick','autoclicker:stopped','scheduler:ran','reminder:due','shell:data','shell:closed','toast:push','auth:changed','splash:progress','splash:done','server:state']
+    const allowed = ['macro:status','macro:progress','system:update','clipboard:update','autoclicker:tick','autoclicker:stopped','scheduler:ran','reminder:due','shell:data','shell:closed','toast:push','auth:changed','splash:progress','splash:done','server:state','ai:stream:chunk','ai:stream:end']
     if (allowed.includes(channel)) ipcRenderer.on(channel, (_, ...args) => callback(...args))
   },
   off: (channel, callback) => ipcRenderer.removeListener(channel, callback),
