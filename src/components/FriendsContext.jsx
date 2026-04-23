@@ -10,6 +10,7 @@ export function FriendsProvider({ children }) {
   const [connected, setConnected] = useState(false)
   const [presence, setPresence] = useState({})   // userId -> { status, activity, online, ts }
   const [friends, setFriends] = useState([])      // array of userId strings
+  const [dummyFriends, setDummyFriends] = useState([]) // dev-mode injected fakes
   const [myId, setMyId] = useState(() => {
     let id = localStorage.getItem('scotty-my-id')
     if (!id) { id = 'user-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('scotty-my-id', id) }
@@ -113,7 +114,21 @@ export function FriendsProvider({ children }) {
   }, [myId])
 
   return (
-    <FriendsContext.Provider value={{ connected, myId, friends, presence, addFriend, publishPresence, fetchFriends }}>
+    <FriendsContext.Provider value={{
+      connected,
+      myId,
+      friends: [...friends, ...dummyFriends.map(d => d.id)],
+      presence: { ...presence, ...Object.fromEntries(dummyFriends.map(d => [d.id, d.presence])) },
+      addFriend,
+      publishPresence,
+      fetchFriends,
+      // Dev-mode helpers. Safe to call even when dev mode is off — they simply
+      // mutate a parallel list without hitting the server.
+      addDummyFriend: (friend) => setDummyFriends(prev => [...prev, friend]),
+      removeDummyFriend: (id) => setDummyFriends(prev => prev.filter(d => d.id !== id)),
+      clearDummyFriends: () => setDummyFriends([]),
+      dummyFriends,
+    }}>
       {children}
     </FriendsContext.Provider>
   )

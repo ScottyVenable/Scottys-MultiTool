@@ -116,7 +116,22 @@ export function CurrencyProvider({ children }) {
     return ok
   }, [])
 
-  const value = { ...state, award, spend, purchase }
+  // Dev-mode helper: directly set the coin balance to an arbitrary amount.
+  // Logs a `grant` transaction so the change is visible in history. Meant for
+  // debugging only — gated behind the Dev Tools panel in the UI.
+  const grant = useCallback((amount, label = 'Dev grant') => {
+    if (!Number.isFinite(amount) || amount === 0) return
+    setState(prev => {
+      const tx = { id: Date.now() + '-g-' + Math.random().toString(36).slice(2, 6), kind: amount > 0 ? 'grant' : 'spend', amount, label, ts: Date.now() }
+      return { ...prev, coins: Math.max(0, prev.coins + amount), transactions: [tx, ...prev.transactions].slice(0, MAX_TX) }
+    })
+  }, [])
+
+  const reset = useCallback(() => {
+    setState({ coins: 0, transactions: [], challenges: DEFAULT_CHALLENGES.map(c => ({ ...c, progress: 0 })), day: todayKey(), purchases: [] })
+  }, [])
+
+  const value = { ...state, award, spend, purchase, grant, reset }
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>
 }
 
@@ -124,6 +139,6 @@ export function useCurrency() {
   const ctx = useContext(CurrencyContext)
   // Safe fallback so components don't crash if the provider isn't mounted
   // (e.g. during isolated tests).
-  if (!ctx) return { coins: 0, transactions: [], challenges: [], award: () => {}, spend: () => false }
+  if (!ctx) return { coins: 0, transactions: [], challenges: [], purchases: [], award: () => {}, spend: () => false, purchase: () => false, grant: () => {}, reset: () => {} }
   return ctx
 }

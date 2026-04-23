@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Settings, Key, Smartphone, Bell, Palette, Save, Check, RefreshCw, Lock, X, Download, FileCog } from 'lucide-react'
+import { Settings, Key, Smartphone, Bell, Palette, Save, Check, RefreshCw, Lock, X, Download, FileCog, Code2 } from 'lucide-react'
 import { sha256 } from './PinLock'
 import ProfileSection from './Auth/ProfileSection'
+import { useDevMode } from './DevModeContext'
 
 const ACCENT_PRESETS = [
   { name: 'Indigo', color: '#6366f1' },
@@ -15,6 +16,7 @@ const ACCENT_PRESETS = [
 ]
 
 export default function AppSettings() {
+  const { devMode, toggle: toggleDevMode } = useDevMode()
   const [settings, setSettings] = useState({
     aiProvider: 'lmstudio',
     aiApiKey: '',
@@ -323,6 +325,27 @@ export default function AppSettings() {
         <div className="text-sm text-muted">
           All data (macros, hotkeys, settings) is stored locally on your computer. No data is ever sent to external servers unless you configure an API key for AI features.
         </div>
+      </Section>
+
+      {/* Developer */}
+      <Section title="Developer" icon={Code2}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--text-0)', fontWeight: 500 }}>Dev Mode</div>
+            <div className="text-sm text-muted">
+              Unlocks the Dev Tools page for injecting dummy friends, granting coins, inspecting the persisted store, and clearing caches.
+            </div>
+          </div>
+          <label className="toggle" title={devMode ? 'Disable dev mode' : 'Enable dev mode'}>
+            <input type="checkbox" checked={devMode} onChange={e => toggleDevMode(e.target.checked)} />
+            <span className="toggle-track" />
+          </label>
+        </div>
+        {devMode && (
+          <div className="text-xs" style={{ color: 'var(--yellow)', marginTop: 8 }}>
+            Dev Mode is on — see the "Dev Tools" entry in the sidebar.
+          </div>
+        )}
       </Section>
     </div>
   )
