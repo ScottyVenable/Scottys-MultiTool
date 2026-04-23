@@ -52,11 +52,11 @@ export default function FriendsPanel() {
     const ok = await addFriend(id)
     setAdding(false)
     if (ok) {
-      toast?.({ message: `Added ${id}`, type: 'success' })
+      toast?.show?.({ type: 'success', title: 'Friend added', message: id })
       setAddInput('')
       setShowAdd(false)
     } else {
-      toast?.({ message: 'Could not add friend — server may be offline', type: 'error' })
+      toast?.show?.({ type: 'error', title: 'Could not add friend', message: 'Server may be offline' })
     }
   }
 

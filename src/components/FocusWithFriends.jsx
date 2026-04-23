@@ -102,74 +102,161 @@ function RoomView({ room, myId, onAction, onLeave }) {
     if (!room) return
     if (prevPhase.current === 'work' && room.phase === 'break') {
       award('focus_complete', { label: `Focus with friends · ${room.workMin}m` })
-      toast?.({ message: 'Work session done! Break time.', type: 'success' })
+      toast?.show?.({ type: 'success', title: 'Work session done', message: 'Break time.' })
     }
     prevPhase.current = room.phase
   }, [room?.phase])
 
   if (!room) return null
 
-  const circumference = 2 * Math.PI * 48
-  const dashOffset = circumference * (1 - fraction)
+  // Match FocusTimer's visuals: 200px ring, same strokeDasharray math, same
+  // phase-colored palette, same big digit font. Keeps the two surfaces visually
+  // consistent so users know they behave alike.
+  const phase = room.phase === 'waiting' ? 'work' : room.phase
+  const phaseColor = phase === 'work' ? 'var(--accent)' : 'var(--green)'
+  const phaseLabel = room.phase === 'waiting' ? 'Waiting to start' : phase === 'work' ? 'Focus Time' : 'Break'
+  const progressPct = Math.min(100, Math.round(fraction * 100))
+  const radius = 88
+  const circumference = 2 * Math.PI * radius
 
   return (
-    <div className="fwf-room">
-      <div className="fwf-room-header">
-        <span className="fwf-room-title">{room.name}</span>
-        <button className="fwf-icon-btn danger" title="Leave room" onClick={onLeave}><LogOut size={14} /></button>
-      </div>
-
-      <div className="fwf-phase-pill" data-phase={room.phase}>
-        {room.phase === 'waiting' ? 'Waiting to start' : room.phase === 'work' ? 'Focus' : 'Break'}
-      </div>
-
-      <div className="fwf-clock-wrap">
-        <svg className="fwf-ring" viewBox="0 0 110 110">
-          <circle cx="55" cy="55" r="48" className="fwf-ring-bg" />
-          <circle cx="55" cy="55" r="48" className="fwf-ring-fg" data-phase={room.phase}
-            strokeDasharray={circumference} strokeDashoffset={dashOffset}
-            transform="rotate(-90 55 55)" />
-        </svg>
-        <div className="fwf-clock-text">
-          <span className="fwf-clock-time">{display}</span>
-          {isPaused && <span className="fwf-clock-sub">Paused</span>}
+    <div className="animate-in">
+      <div className="page-header">
+        <div className="page-header-left">
+          <div className="page-title">{room.name}</div>
+          <div className="page-subtitle">Shared focus session with {room.members.length} member{room.members.length !== 1 ? 's' : ''}</div>
         </div>
+        <button className="btn btn-ghost btn-sm" onClick={onLeave} data-tip="Leave room">
+          <LogOut size={13} /> Leave
+        </button>
       </div>
 
-      <div className="fwf-members">
-        {room.members.map(uid => {
-          const initial = uid.replace(/^user-/, '').charAt(0).toUpperCase()
-          const voted = room.pauseVotes?.includes(uid)
-          return (
-            <div key={uid} className="fwf-member-dot" title={uid}>
-              <div className="fwf-member-avatar" data-host={uid === room.host}>{initial}</div>
-              {voted && <span className="fwf-vote-dot" title="Voted to pause" />}
+      <div className="grid-2 gap-16" style={{ alignItems: 'start' }}>
+        {/* Timer card (mirrors FocusTimer) */}
+        <div className="card text-center" style={{ padding: 32 }}>
+          {/* Phase tabs (read-only indicator for non-hosts) */}
+          <div className="flex gap-6 mb-24" style={{ justifyContent: 'center' }}>
+            {[
+              { id: 'work', label: 'Focus' },
+              { id: 'break', label: 'Break' },
+            ].map(p => (
+              <button
+                key={p.id}
+                className={`btn btn-sm ${phase === p.id ? 'btn-primary' : 'btn-ghost'}`}
+                disabled={!isHost || room.phase === 'waiting'}
+                onClick={() => onAction('phase', { phase: p.id })}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Progress ring */}
+          <div style={{ position: 'relative', width: 200, height: 200, margin: '0 auto 24px' }}>
+            <svg width="200" height="200" style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx="100" cy="100" r={radius} fill="none" stroke="var(--bg-3)" strokeWidth="8" />
+              <circle
+                cx="100" cy="100" r={radius}
+                fill="none"
+                stroke={phaseColor}
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${circumference}`}
+                strokeDashoffset={`${circumference * (1 - progressPct / 100)}`}
+                style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.5s' }}
+              />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 42, fontWeight: 200, fontFamily: 'var(--mono)', color: 'var(--text-0)', letterSpacing: -2 }}>
+                {display}
+              </div>
+              <div style={{ fontSize: 12, color: phaseColor, fontWeight: 600 }}>{phaseLabel}</div>
+              {isPaused && <div style={{ fontSize: 10, color: 'var(--yellow)', marginTop: 4, letterSpacing: '.08em', textTransform: 'uppercase' }}>Paused</div>}
             </div>
-          )
-        })}
-      </div>
+          </div>
 
-      <div className="fwf-controls">
-        {room.phase === 'waiting' && isHost && (
-          <button className="fwf-btn primary" onClick={() => onAction('start')}>
-            <Play size={13} /> Start
-          </button>
-        )}
-        {room.phase !== 'waiting' && !isPaused && (
-          <button className="fwf-btn" onClick={() => onAction('pause-vote')} disabled={hasVoted}>
-            <Pause size={13} /> {hasVoted ? `Voted (${room.pauseVotes.length}/${quorum})` : 'Pause vote'}
-          </button>
-        )}
-        {room.phase !== 'waiting' && isPaused && isHost && (
-          <button className="fwf-btn primary" onClick={() => onAction('resume')}>
-            <Play size={13} /> Resume
-          </button>
-        )}
-        {room.phase !== 'waiting' && isHost && (
-          <button className="fwf-btn" onClick={() => onAction('phase', { phase: room.phase === 'work' ? 'break' : 'work' })}>
-            <SkipForward size={13} /> Skip phase
-          </button>
-        )}
+          {/* Controls */}
+          <div className="flex gap-8" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+            {room.phase === 'waiting' && isHost && (
+              <button className="btn btn-lg" style={{ background: phaseColor, color: 'white', padding: '10px 32px' }} onClick={() => onAction('start')}>
+                <Play size={16} /> Start
+              </button>
+            )}
+            {room.phase !== 'waiting' && !isPaused && (
+              <button className="btn btn-secondary" onClick={() => onAction('pause-vote')} disabled={hasVoted}>
+                <Pause size={15} /> {hasVoted ? `Voted (${room.pauseVotes.length}/${quorum})` : `Vote to pause (${room.pauseVotes.length}/${quorum})`}
+              </button>
+            )}
+            {room.phase !== 'waiting' && isPaused && isHost && (
+              <button className="btn btn-lg" style={{ background: phaseColor, color: 'white', padding: '10px 32px' }} onClick={() => onAction('resume')}>
+                <Play size={16} /> Resume
+              </button>
+            )}
+            {room.phase !== 'waiting' && isHost && (
+              <button className="btn btn-secondary btn-icon" onClick={() => onAction('phase', { phase: phase === 'work' ? 'break' : 'work' })} data-tip="Skip phase">
+                <SkipForward size={15} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="flex-col gap-16">
+          {/* Members card */}
+          <div className="card">
+            <div className="card-title mb-12"><Users size={14} className="card-title-icon" /> Members ({room.members.length})</div>
+            <div className="flex-col gap-6">
+              {room.members.map(uid => {
+                const initial = uid.replace(/^user-/, '').charAt(0).toUpperCase()
+                const voted = room.pauseVotes?.includes(uid)
+                const isRoomHost = uid === room.host
+                const isMe = uid === myId
+                return (
+                  <div key={uid} className="flex items-center gap-8" style={{ padding: '4px 2px' }}>
+                    <div
+                      className="fwf-member-avatar"
+                      data-host={isRoomHost}
+                      title={uid}
+                      style={{ flexShrink: 0 }}
+                    >{initial}</div>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
+                      <div style={{ color: 'var(--text-1)' }}>
+                        {isMe ? 'You' : uid}
+                        {isRoomHost && <span style={{ color: 'var(--yellow)', marginLeft: 6, fontSize: 10 }}>HOST</span>}
+                      </div>
+                    </div>
+                    {voted && <span className="fwf-vote-dot" title="Voted to pause" />}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Room info */}
+          <div className="card">
+            <div className="card-title mb-12"><Timer size={14} className="card-title-icon" /> Session</div>
+            <div className="flex-col gap-6 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Work</span>
+                <span className="mono">{room.workMin}m</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Break</span>
+                <span className="mono">{room.breakMin}m</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Phase</span>
+                <span style={{ color: phaseColor, fontWeight: 600, textTransform: 'capitalize' }}>{room.phase}</span>
+              </div>
+              {!isHost && room.phase !== 'waiting' && (
+                <div className="text-xs text-muted mt-8" style={{ lineHeight: 1.5 }}>
+                  Only the host can start, resume, or skip phases. Members can
+                  vote to pause — {quorum} vote{quorum !== 1 ? 's' : ''} required.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -241,8 +328,8 @@ export default function FocusWithFriends() {
       })
       const data = await r.json()
       if (data.ok) { setActiveRoom(data.room); setRooms(prev => [...prev, data.room]) }
-      else toast?.({ message: 'Could not create room', type: 'error' })
-    } catch { toast?.({ message: 'Server offline', type: 'error' }) }
+      else toast?.show?.({ type: 'error', title: 'Could not create room' })
+    } catch { toast?.show?.({ type: 'error', title: 'Server offline' }) }
     setLoading(false)
   }
 
@@ -256,8 +343,8 @@ export default function FocusWithFriends() {
       })
       const data = await r.json()
       if (data.ok) setActiveRoom(data.room)
-      else toast?.({ message: 'Could not join room', type: 'error' })
-    } catch { toast?.({ message: 'Server offline', type: 'error' }) }
+      else toast?.show?.({ type: 'error', title: 'Could not join room' })
+    } catch { toast?.show?.({ type: 'error', title: 'Server offline' }) }
     setLoading(false)
   }
 
