@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Trophy, Plus, Check, Trash2, Sparkles, Star, Flame, X, User, Calendar, Award, Tag, Users, Home as HomeIcon } from 'lucide-react'
+import { Trophy, Plus, Check, Trash2, Sparkles, Star, Flame, X, User, Calendar, Award, Tag, Users, Home as HomeIcon, ArrowUp } from 'lucide-react'
 import { useToast } from './Toast'
 import { logError, safeCall } from '../utils/logger'
 import { useCurrency } from './CurrencyContext'
@@ -218,29 +218,40 @@ export default function ChorePlanner() {
 
   const deleteChore = async (id) => {
     if (!confirm('Delete this chore?')) return
+    // Deleting a chore never grants XP. Also clean up any auto-minted reminder
+    // for this chore so we don't leave orphaned notifications behind.
+    try {
+      if (window.api.reminders?.list) {
+        const existing = await window.api.reminders.list()
+        for (const r of (existing || [])) {
+          if (r.source === `chore:${id}`) await window.api.reminders.delete(r.id)
+        }
+      }
+    } catch {}
     await safeCall(() => window.api.chores.delete(id), { where: 'chores.delete', toast })
     refresh()
   }
 
   const complete = async (chore) => {
     const prevLevel = profile.level
-    const prevAchievements = new Set(profile.achievements || [])
     const result = await safeCall(() => window.api.chores.complete(chore.id, chore.owner), { where: 'chores.complete', toast })
-    if (result?.profile) {
-      setProfile(result.profile)
-      setChores(prev => prev.map(c => c.id === chore.id ? result.chore : c))
-      try { award('chore_complete', { label: chore.title }) } catch {}
-      toast.show({ type: 'success', title: `+${chore.points || chore.difficulty*10} XP`, message: chore.title })
-      if (result.profile.level > prevLevel) {
-        toast.show({ type: 'success', title: `🎉 Level up!`, message: `You are now level ${result.profile.level}` })
-      }
-      // Announce any newly unlocked achievements (backend engine sets them on profile.achievements)
-      for (const a of (result.profile.achievements || [])) {
-        if (!prevAchievements.has(a)) {
-          const def = achievementDefs.find(d => d.id === a)
-          toast.show({ type: 'success', title: '🏆 Achievement', message: def?.name || a })
-        }
-      }
+    if (!result?.profile) {
+      toast.show({ type: 'error', title: 'Could not complete chore', message: 'Please try again.' })
+      return
+    }
+    setProfile(result.profile)
+    setChores(prev => prev.map(c => c.id === chore.id ? (result.chore || c) : c))
+    try { award('chore_complete', { label: chore.title }) } catch {}
+    toast.show({ type: 'success', title: `+${chore.points || (chore.difficulty || 1) * 10} XP`, message: chore.title })
+    if (result.profile.level > prevLevel) {
+      toast.show({ type: 'success', title: 'Level up', message: `You are now level ${result.profile.level}` })
+    }
+    // Use the explicit list of newly-unlocked achievements from the backend to
+    // avoid re-announcing ones the user has already seen (React state can be
+    // stale between back-to-back completions).
+    for (const a of (result.newAchievements || [])) {
+      const def = achievementDefs.find(d => d.id === a)
+      toast.show({ type: 'success', title: 'Achievement unlocked', message: def?.name || a })
     }
   }
 
@@ -454,7 +465,7 @@ export default function ChorePlanner() {
                 <div key={a.id} className={`achievement-card ${got ? '' : 'locked'}`}>
                   <div className="achievement-icon"><Trophy size={16} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="achievement-name">{a.name}{got && <span style={{ marginLeft: 6, color: 'var(--green)' }}>✓</span>}</div>
+                    <div className="achievement-name">{a.name}{got && <Check size={11} style={{ marginLeft: 6, color: 'var(--green)', verticalAlign: 'middle' }} />}</div>
                     <div className="achievement-desc">{a.description}</div>
                   </div>
                 </div>
@@ -565,7 +576,7 @@ function CalendarTab({ chores, offset, setOffset, memberColor }) {
             </div>
             {c.completions.length > 0 && (
               <div className="chore-cal-done" title={`${c.completions.length} completed`}>
-                ✓ {c.completions.length}
+                <Check size={9} style={{ verticalAlign: 'middle' }} /> {c.completions.length}
               </div>
             )}
           </div>
